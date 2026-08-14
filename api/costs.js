@@ -95,7 +95,12 @@ async function fetchAllCosts(overrides, allowEnvFallback) {
     days.push(entry);
   }
 
-  const models = [...modelTotals.values()].sort((a, b) => b.amount_usd - a.amount_usd);
+  // Drop noise: flat recurring subscriptions (e.g. Google's "Gemini Code
+  // Assist monthly subscription") aren't per-token model usage, and rows
+  // under a cent are clutter, not signal.
+  const models = [...modelTotals.values()]
+    .filter(m => m.amount_usd >= 0.01 && !/subscription/i.test(m.model))
+    .sort((a, b) => b.amount_usd - a.amount_usd);
 
   return {
     providers: providers.map(p => ({ name: p.name, label: p.label, failed: p.name in errors })),

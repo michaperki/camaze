@@ -333,6 +333,33 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
   wrap.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
 }
 
+// Raw model IDs aren't how anyone talks about these models — reformat the
+// common Anthropic/OpenAI naming patterns into something readable. Google's
+// `model` is already sku.description text from GCP, so it's left as-is.
+function prettifyModel(provider, model) {
+  if (provider === "anthropic") {
+    // "claude-sonnet-4-6" -> "Claude Sonnet 4.6"; "claude-haiku-4-5-20251001"
+    // -> "Claude Haiku 4.5" (snapshot date suffix dropped).
+    const parts = model.replace(/-\d{8}$/, "").split("-");
+    if (parts[0] !== "claude" || parts.length < 2) return model;
+    const family = parts[1][0].toUpperCase() + parts[1].slice(1);
+    const versionParts = parts.slice(2);
+    if (versionParts.length === 0) return `Claude ${family}`;
+    const version = versionParts.every(p => /^\d+$/.test(p))
+      ? versionParts.join(".")
+      : versionParts.join(" ");
+    return `Claude ${family} ${version}`;
+  }
+  if (provider === "openai") {
+    // "gpt-5.2-2025-12-11" -> "GPT-5.2"; "gpt-4o-mini-2024-07-18" -> "GPT-4o mini".
+    const stripped = model.replace(/-\d{4}-\d{2}-\d{2}$/, "");
+    const m = stripped.match(/^gpt-([0-9.]+[a-z]*)(-(.+))?$/i);
+    if (!m) return stripped;
+    return `GPT-${m[1]}${m[3] ? " " + m[3].replace(/-/g, " ") : ""}`;
+  }
+  return model;
+}
+
 function renderModels(models) {
   const card = document.getElementById("models-card");
   if (!models || models.length === 0) {
@@ -345,9 +372,10 @@ function renderModels(models) {
   document.getElementById("models-content").innerHTML = models.map(m => {
     const pct = maxAmount > 0 ? Math.max((m.amount_usd / maxAmount) * 100, 1) : 0;
     const fill = SERIES_VARS[m.provider] || "var(--text-muted)";
+    const label = prettifyModel(m.provider, m.model);
     return (
       '<div class="model-row">' +
-      `<span class="model-label">${esc(m.model)}</span>` +
+      `<span class="model-label" title="${esc(m.model)}">${esc(label)}</span>` +
       '<div class="model-bar-track">' +
       `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` +
       "</div>" +
