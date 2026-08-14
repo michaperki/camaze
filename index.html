@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>camaze — how much is that?!</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:        #f9f9f7;
+    --surface-1:   #fcfcfb;
+    --text-primary:#0b0b0b;
+    --text-secondary:#52514e;
+    --text-muted:  #898781;
+    --grid:        #e1e0d9;
+    --baseline:    #c3c2b7;
+    --series-1:    #2a78d6;  /* Anthropic */
+    --series-2:    #eb6834;  /* OpenAI */
+    --series-3:    #1baf7a;  /* Google */
+    --border:      rgba(11,11,11,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page:        #0d0d0d;
+      --surface-1:   #1a1a19;
+      --text-primary:#ffffff;
+      --text-secondary:#c3c2b7;
+      --text-muted:  #898781;
+      --grid:        #2c2c2a;
+      --baseline:    #383835;
+      --series-1:    #3987e5;
+      --series-2:    #d95926;
+      --series-3:    #199e70;
+      --border:      rgba(255,255,255,0.10);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 20px 48px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 2px; }
+  .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px 16px;
+  }
+  .stat-label { font-size: 13px; color: var(--text-secondary); }
+  .stat-value { font-size: 48px; font-weight: 600; line-height: 1.15; margin: 2px 0 8px; }
+  .legend { display: flex; gap: 20px; flex-wrap: wrap; margin: 0 0 16px; font-size: 13px; }
+  .legend-item { display: flex; align-items: center; gap: 7px; color: var(--text-secondary); }
+  .legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .legend-total { font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .notes { margin: 0 0 12px; }
+  .note { font-size: 13px; color: var(--text-secondary); padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; }
+  .message { color: var(--text-secondary); font-size: 14px; padding: 24px 0; }
+  #chart-wrap { position: relative; }
+  svg { display: block; width: 100%; height: auto; }
+  .tick-label, .x-label { font-size: 11px; fill: var(--text-muted); }
+  .tick-label { font-variant-numeric: tabular-nums; }
+  #tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    white-space: nowrap;
+    display: none;
+    z-index: 2;
+  }
+  #tooltip .t-date { color: var(--text-secondary); margin-bottom: 3px; }
+  #tooltip .t-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  #tooltip .t-value { font-weight: 600; font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>camaze <span style="color:var(--text-muted);font-weight:400">— how much is that?!</span></h1>
+  <p class="subtitle">AI API spend, daily, last 30 days (UTC)</p>
+  <div class="card">
+    <div id="content"><div class="message">Loading cost data&hellip;</div></div>
+  </div>
+</main>
+
+<script>
+const SERIES_VARS = {
+  anthropic: "var(--series-1)",
+  openai: "var(--series-2)",
+  google: "var(--series-3)",
+};
+
+const fmtUSD = (v, opts = {}) =>
+  v.toLocaleString("en-US", { style: "currency", currency: "USD", ...opts });
+
+const fmtDate = (iso) =>
+  new Date(iso + "T00:00:00Z").toLocaleDateString("en-US", {
+    month: "short", day: "numeric", timeZone: "UTC",
+  });
+
+function niceTicks(max) {
+  if (max <= 0) return [0, 1];
+  const rough = max / 4;
+  const pow = Math.pow(10, Math.floor(Math.log10(rough)));
+  const step = [1, 2, 5, 10].map(m => m * pow).find(s => s >= rough);
+  const ticks = [];
+  for (let v = 0; v <= max + 1e-9; v += step) ticks.push(v);
+  if (ticks[ticks.length - 1] < max) ticks.push(ticks.length * step);
+  return ticks;
+}
+
+const esc = (s) => String(s).replace(/</g, "&lt;");
+
+function render({ providers, days, totals, errors }) {
+  const content = document.getElementById("content");
+  const active = providers.filter(p => !p.failed);
+
+  // Per-provider failure notes (shown above the chart, plainly).
+  let notes = "";
+  for (const p of providers) {
+    if (!p.failed) continue;
+    const others = active.map(a => a.label).join(", ");
+    notes += `<div class="note"><strong>${esc(p.label)}</strong>: ${esc(errors[p.name])}` +
+      (others ? ` — showing ${esc(others)} only.` : "") + "</div>";
+  }
+
+  if (active.length === 0) {
+    content.innerHTML = `<div class="notes">${notes}</div>` +
+      '<div class="message">No provider data could be loaded.</div>';
+    return;
+  }
+
+  const header =
+    '<div class="stat-label">Total, last 30 days</div>' +
+    '<div class="stat-value">' + fmtUSD(totals.combined) + "</div>" +
+    '<div class="legend">' +
+    active.map(p =>
+      `<span class="legend-item"><span class="legend-swatch" style="background:${SERIES_VARS[p.name]}"></span>` +
+      `${esc(p.label)} <span class="legend-total">${fmtUSD(totals[p.name])}</span></span>`
+    ).join("") +
+    "</div>" +
+    (notes ? `<div class="notes">${notes}</div>` : "");
+
+  if (days.every(d => active.every(p => d[p.name] === 0))) {
+    content.innerHTML = header + '<div class="message">No spend recorded in this period.</div>';
+    return;
+  }
+
+  const W = 920, H = 300;
+  const m = { top: 8, right: 8, bottom: 26, left: 52 };
+  const innerW = W - m.left - m.right;
+  const innerH = H - m.top - m.bottom;
+  const dayTotal = d => active.reduce((s, p) => s + d[p.name], 0);
+  const ticks = niceTicks(Math.max(...days.map(dayTotal)));
+  const yMax = ticks[ticks.length - 1];
+  const y = v => m.top + innerH - (v / yMax) * innerH;
+  const band = innerW / days.length;
+  const barW = Math.min(24, band - 2);          // ≤24px bar, ≥2px gap between bars
+  const baseline = m.top + innerH;
+  const r = 4;                                   // rounded data-end (top of stack)
+  const GAP = 2;                                 // surface gap between stacked segments
+
+  let s = "";
+  for (const t of ticks) {
+    s += `<line x1="${m.left}" x2="${W - m.right}" y1="${y(t)}" y2="${y(t)}" stroke="var(--grid)" stroke-width="1"/>`;
+    s += `<text class="tick-label" x="${m.left - 8}" y="${y(t) + 3.5}" text-anchor="end">${t >= 1 ? "$" + t.toLocaleString("en-US") : fmtUSD(t)}</text>`;
+  }
+
+  // Stacked bars: fixed provider order bottom-up; topmost visible segment gets
+  // the rounded cap; a 2px surface gap separates touching segments.
+  days.forEach((d, i) => {
+    const x = m.left + i * band + (band - barW) / 2;
+    const segs = active
+      .map(p => ({ name: p.name, usd: d[p.name] }))
+      .filter(seg => seg.usd > 0);
+    let cum = 0;
+    segs.forEach((seg, k) => {
+      const bottomVal = cum, topVal = cum + seg.usd;
+      cum = topVal;
+      let yBottom = y(bottomVal);
+      let yTop = y(topVal);
+      if (k > 0) yBottom -= GAP;                 // surface gap below this segment
+      const h = yBottom - yTop;
+      if (h <= 0.5) return;
+      const isTop = k === segs.length - 1;
+      const fill = SERIES_VARS[seg.name];
+      if (isTop) {
+        const rr = Math.min(r, h, barW / 2);
+        s += `<path d="M${x},${yBottom} L${x},${yTop + rr} Q${x},${yTop} ${x + rr},${yTop} L${x + barW - rr},${yTop} Q${x + barW},${yTop} ${x + barW},${yTop + rr} L${x + barW},${yBottom} Z" fill="${fill}"/>`;
+      } else {
+        s += `<rect x="${x}" y="${yTop}" width="${barW}" height="${h}" fill="${fill}"/>`;
+      }
+    });
+  });
+
+  s += `<line x1="${m.left}" x2="${W - m.right}" y1="${baseline}" y2="${baseline}" stroke="var(--baseline)" stroke-width="1"/>`;
+  days.forEach((d, i) => {
+    if (i % 5 !== 0 && i !== days.length - 1) return;
+    const cx = m.left + i * band + band / 2;
+    s += `<text class="x-label" x="${cx}" y="${H - 8}" text-anchor="middle">${fmtDate(d.date)}</text>`;
+  });
+  // full-band hover targets (bigger than the marks)
+  days.forEach((d, i) => {
+    s += `<rect data-i="${i}" x="${m.left + i * band}" y="${m.top}" width="${band}" height="${innerH}" fill="transparent"/>`;
+  });
+
+  content.innerHTML = header +
+    '<div id="chart-wrap">' +
+    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Stacked bar chart of daily AI API spend by provider over the last 30 days">${s}</svg>` +
+    '<div id="tooltip"></div></div>';
+
+  const wrap = document.getElementById("chart-wrap");
+  const tooltip = document.getElementById("tooltip");
+  wrap.addEventListener("mousemove", (e) => {
+    const t = e.target.closest("rect[data-i]");
+    if (!t) { tooltip.style.display = "none"; return; }
+    const d = days[+t.dataset.i];
+    tooltip.innerHTML =
+      `<div class="t-date">${fmtDate(d.date)} &middot; ${fmtUSD(dayTotal(d))}</div>` +
+      active.map(p =>
+        `<div class="t-row"><span class="legend-swatch" style="background:${SERIES_VARS[p.name]}"></span>` +
+        `${esc(p.label)}<span class="t-value">${fmtUSD(d[p.name])}</span></div>`
+      ).join("");
+    tooltip.style.display = "block";
+    const box = wrap.getBoundingClientRect();
+    const tx = Math.min(e.clientX - box.left + 12, box.width - tooltip.offsetWidth - 4);
+    tooltip.style.left = tx + "px";
+    tooltip.style.top = (e.clientY - box.top - 48) + "px";
+  });
+  wrap.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+}
+
+fetch("/api/costs")
+  .then(async (res) => {
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    render(data);
+  })
+  .catch((err) => {
+    document.getElementById("content").innerHTML =
+      '<div class="message">Could not load cost data: ' + esc(err.message) + "</div>";
+  });
+</script>
+</body>
+</html>

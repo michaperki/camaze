@@ -1,0 +1,53 @@
+// Anthropic Admin API cost report -> normalized [{ date, provider, amount_usd }]
+const API_URL = "https://api.anthropic.com/v1/organizations/cost_report";
+
+// `start`: Date (UTC midnight). Throws on missing key or API error.
+async function fetchCosts(start) {
+  const key = process.env.ANTHROPIC_ADMIN_KEY;
+  if (!key) throw new Error("ANTHROPIC_ADMIN_KEY is not set in .env");
+
+  const centsByDay = new Map();
+  let page = null;
+  do {
+    const params = new URLSearchParams({
+      starting_at: start.toISOString(),
+      bucket_width: "1d",
+      limit: "31",
+    });
+    if (page) params.set("page", page);
+
+    const res = await fetch(`${API_URL}?${params}`, {
+      headers: {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+      },
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(body?.error?.message || `HTTP ${res.status} from Anthropic API`);
+    }
+
+    for (const bucket of body.data || []) {
+      const day = bucket.starting_at.slice(0, 10);
+      let cents = centsByDay.get(day) || 0;
+      for (const item of bucket.results || []) {
+        // Coerce at the boundary — amount is a decimal string in cents.
+        const value = Number(item.amount ?? 0);
+        if (!Number.isFinite(value)) {
+          throw new Error(`Anthropic returned a non-numeric amount for ${day}: ${JSON.stringify(item.amount)}`);
+        }
+        cents += value;
+      }
+      centsByDay.set(day, cents);
+    }
+    page = body.has_more ? body.next_page : null;
+  } while (page);
+
+  return [...centsByDay].map(([date, cents]) => ({
+    date,
+    provider: "anthropic",
+    amount_usd: cents / 100,
+  }));
+}
+
+module.exports = { name: "anthropic", label: "Anthropic", fetchCosts };
