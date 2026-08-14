@@ -14,9 +14,12 @@ Data is fetched fresh on every page load from each provider's cost API:
 
 Each provider lives in its own module under `providers/`, normalizing to
 `{ date, provider, amount_usd }` — adding a provider means adding one file and
-one line in `server.js`. No database, no auth, no settings. If one or two
+one line in `api/costs.js`. No database, no auth, no settings. If one or two
 providers' credentials are missing or their API errors, the rest still
 render, with a note saying which ones failed.
+
+Deploys as static + serverless on [Vercel](https://vercel.com): `public/index.html`
+is the static frontend, `api/costs.js` is the one serverless function.
 
 ## Setup
 
@@ -48,7 +51,8 @@ render, with a note saying which ones failed.
    cp .env.example .env
    ```
 
-2. Run it (Node 22+, no dependencies to install):
+2. Run it locally with the [Vercel CLI](https://vercel.com/docs/cli) (no
+   dependencies to install):
 
    ```sh
    npm run dev

@@ -19,13 +19,17 @@ async function getAccessToken() {
     return cachedToken.token;
   }
 
+  const inlineJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   const keyPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  if (!keyPath) throw new Error("GOOGLE_APPLICATION_CREDENTIALS is not set in .env");
+  if (!inlineJson && !keyPath) {
+    throw new Error("Neither GOOGLE_SERVICE_ACCOUNT_JSON nor GOOGLE_APPLICATION_CREDENTIALS is set in .env");
+  }
   let key;
   try {
-    key = JSON.parse(fs.readFileSync(keyPath, "utf8"));
+    key = JSON.parse(inlineJson ?? fs.readFileSync(keyPath, "utf8"));
   } catch (e) {
-    throw new Error(`Could not read service account key file (${keyPath}): ${e.message}`);
+    const source = inlineJson ? "GOOGLE_SERVICE_ACCOUNT_JSON" : `service account key file (${keyPath})`;
+    throw new Error(`Could not read ${source}: ${e.message}`);
   }
   if (!key.client_email || !key.private_key) {
     throw new Error("Service account key file is missing client_email/private_key");

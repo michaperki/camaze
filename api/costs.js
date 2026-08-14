@@ -1,15 +1,9 @@
 // camaze — minimal AI spend tracker.
-// Serves one page and proxies each provider's cost API so keys stay server-side.
-const http = require("node:http");
-const fs = require("node:fs");
-const path = require("node:path");
-
-const PORT = process.env.PORT || 3000;
-
+// Vercel serverless function: proxies each provider's cost API so keys stay server-side.
 const providers = [
-  require("./providers/anthropic"),
-  require("./providers/openai"),
-  require("./providers/google"),
+  require("../providers/anthropic"),
+  require("../providers/openai"),
+  require("../providers/google"),
 ];
 
 async function fetchAllCosts() {
@@ -59,29 +53,11 @@ async function fetchAllCosts() {
   };
 }
 
-const server = http.createServer(async (req, res) => {
-  if (req.url === "/api/costs") {
-    try {
-      const data = await fetchAllCosts();
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(data));
-    } catch (err) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: err.message }));
-    }
-    return;
+module.exports = async (req, res) => {
+  try {
+    const data = await fetchAllCosts();
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-
-  if (req.url === "/" || req.url === "/index.html") {
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(fs.readFileSync(path.join(__dirname, "index.html")));
-    return;
-  }
-
-  res.writeHead(404, { "Content-Type": "text/plain" });
-  res.end("Not found");
-});
-
-server.listen(PORT, () => {
-  console.log(`camaze running at http://localhost:${PORT}`);
-});
+};
