@@ -280,6 +280,7 @@ function cardHtml(provider, state) {
         <div class="instructions">${provider.instructions}</div>
         <button class="btn" type="button" data-action="toggle-form" data-provider="${provider.name}">Connect</button>
         <form class="connect-form" data-provider="${provider.name}" style="display:none">
+          <input type="hidden" name="provider" value="${esc(provider.name)}">
           ${fieldsHtml(provider)}
           <div class="form-actions">
             <button class="btn btn-primary" type="submit">Connect</button>
@@ -371,14 +372,18 @@ async function main() {
     if (!form) return;
     e.preventDefault();
 
-    const provider = form.dataset.provider;
     const errorEl = form.querySelector('[data-role="error"]');
     errorEl.textContent = "";
 
     const formData = new FormData(form);
-    const body = { provider };
+    const body = {};
     for (const [k, v] of formData.entries()) {
       if (v) body[k] = v;
+    }
+
+    if (!body.provider) {
+      errorEl.textContent = "Something went wrong reading the form — please refresh and try again.";
+      return;
     }
 
     const submitBtn = form.querySelector('button[type="submit"]');
