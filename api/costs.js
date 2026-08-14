@@ -53,10 +53,20 @@ async function fetchAllCosts() {
   };
 }
 
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let cache = null; // { data, fetchedAt }
+
 module.exports = async (req, res) => {
   try {
+    const now = Date.now();
+    if (cache && now - cache.fetchedAt < CACHE_TTL_MS) {
+      res.status(200).json({ ...cache.data, cached: true, cachedAt: new Date(cache.fetchedAt).toISOString() });
+      return;
+    }
+
     const data = await fetchAllCosts();
-    res.status(200).json(data);
+    cache = { data, fetchedAt: now };
+    res.status(200).json({ ...data, cached: false, cachedAt: new Date(now).toISOString() });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
