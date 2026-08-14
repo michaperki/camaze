@@ -18,6 +18,9 @@
     --series-2:    #eb6834;  /* OpenAI */
     --series-3:    #1baf7a;  /* Google */
     --border:      rgba(11,11,11,0.10);
+    --danger:      #c0392b;
+    --warning:     #b45309;
+    --ok:          #1a7a4c;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -33,6 +36,9 @@
       --series-2:    #d95926;
       --series-3:    #199e70;
       --border:      rgba(255,255,255,0.10);
+      --danger:      #e0655a;
+      --warning:     #f0b429;
+      --ok:          #4fd18f;
     }
   }
   * { box-sizing: border-box; }
@@ -148,6 +154,55 @@
     color: var(--text-secondary);
     text-align: right;
   }
+  #summary-row {
+    display: none;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .stat-card-label { font-size: 12px; color: var(--text-secondary); }
+  .stat-card-value {
+    font-size: 24px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+  }
+  .stat-card-value.stat-danger { color: var(--danger); }
+  .stat-card-value.stat-warning { color: var(--warning); }
+  .stat-card-value.stat-ok { color: var(--ok); }
+  .stat-card-meta { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+  .stat-card-meta a { color: var(--series-1); text-decoration: none; }
+  .stat-card-meta a:hover { text-decoration: underline; }
+  .budget-bar-track { background: var(--grid); border-radius: 3px; height: 8px; margin-top: 10px; }
+  .budget-bar { height: 100%; border-radius: 3px; background: var(--series-1); }
+  .budget-form { display: flex; gap: 8px; margin-top: 2px; }
+  .budget-form input {
+    width: 100px;
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-primary);
+  }
+  .budget-form button, #set-budget-btn {
+    font: inherit;
+    font-size: 12px;
+    color: var(--text-primary);
+    background: var(--page);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  .budget-form button:hover, #set-budget-btn:hover { border-color: var(--text-muted); }
 </style>
 </head>
 <body>
@@ -164,6 +219,22 @@
 <main>
   <h1>camaze <span style="color:var(--text-muted);font-weight:400">— how much is that?!</span></h1>
   <p class="subtitle">AI API spend, daily, last 30 days (UTC)</p>
+  <div id="summary-row">
+    <div class="stat-card">
+      <div class="stat-card-label">Month to Date</div>
+      <div class="stat-card-value" id="mtd-value">—</div>
+      <div class="stat-card-meta" id="mtd-range"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-label">Forecast</div>
+      <div class="stat-card-value" id="forecast-value">—</div>
+      <div class="stat-card-meta">est. month-end</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-label">Budget</div>
+      <div id="budget-content"></div>
+    </div>
+  </div>
   <div class="card">
     <div id="content"><div class="message">Loading cost data&hellip;</div></div>
   </div>
@@ -385,11 +456,92 @@ function renderModels(models) {
   }).join("");
 }
 
-function loadDashboard(accessToken) {
+const fmtMonthRange = (daysElapsed) => {
+  const month = new Date().toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+  return `${month} 1–${daysElapsed}`;
+};
+
+function showBudgetForm(accessToken, currentValue) {
+  const el = document.getElementById("budget-content");
+  el.innerHTML =
+    '<form class="budget-form" id="budget-form">' +
+    `<input type="number" id="budget-input" min="0" step="0.01" placeholder="500.00" value="${currentValue ?? ""}" required>` +
+    '<button type="submit">Save</button>' +
+    "</form>" +
+    '<span class="stat-card-meta" data-role="budget-error"></span>';
+
+  document.getElementById("budget-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const value = Number(document.getElementById("budget-input").value);
+    const errorEl = document.querySelector('[data-role="budget-error"]');
+    if (!Number.isFinite(value) || value < 0) {
+      errorEl.textContent = "Enter a valid amount.";
+      return;
+    }
+    fetch("/api/budget", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ budget: value }),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        loadDashboard(accessToken, true);
+      })
+      .catch((err) => {
+        errorEl.textContent = err.message;
+      });
+  });
+}
+
+function renderSummary(summary, accessToken) {
+  const row = document.getElementById("summary-row");
+  if (!summary) {
+    row.style.display = "none";
+    return;
+  }
+  row.style.display = "grid";
+
+  const { mtd, forecast, days_elapsed, budget } = summary;
+
+  document.getElementById("mtd-value").textContent = fmtUSD(mtd);
+  document.getElementById("mtd-range").textContent = fmtMonthRange(days_elapsed);
+
+  const forecastEl = document.getElementById("forecast-value");
+  forecastEl.textContent = fmtUSD(forecast);
+  forecastEl.className = "stat-card-value";
+  if (budget != null && budget > 0) {
+    if (forecast > budget) forecastEl.classList.add("stat-danger");
+    else if (forecast > budget * 0.8) forecastEl.classList.add("stat-warning");
+    else forecastEl.classList.add("stat-ok");
+  }
+
+  const budgetContent = document.getElementById("budget-content");
+  if (budget != null) {
+    const pct = budget > 0 ? (mtd / budget) * 100 : 0;
+    budgetContent.innerHTML =
+      `<div class="stat-card-value">${fmtUSD(budget)}</div>` +
+      `<div class="budget-bar-track"><div class="budget-bar" style="width:${Math.min(pct, 100)}%"></div></div>` +
+      `<div class="stat-card-meta">${Math.round(pct)}% used &middot; <a href="#" id="edit-budget-link">Edit</a></div>`;
+    document.getElementById("edit-budget-link").addEventListener("click", (e) => {
+      e.preventDefault();
+      showBudgetForm(accessToken, budget);
+    });
+  } else {
+    budgetContent.innerHTML = '<button id="set-budget-btn" type="button">Set budget</button>';
+    document.getElementById("set-budget-btn").addEventListener("click", () => {
+      showBudgetForm(accessToken, null);
+    });
+  }
+}
+
+function loadDashboard(accessToken, forceRefreshOverride) {
   // Set by the Integrations page right after connecting/disconnecting a
-  // provider — bypass the cache once so the change shows up immediately.
-  const forceRefresh = sessionStorage.getItem("camaze_keys_changed");
-  if (forceRefresh) sessionStorage.removeItem("camaze_keys_changed");
+  // provider, or by a successful budget save — bypass the cache once so
+  // the change shows up immediately.
+  const sessionFlag = sessionStorage.getItem("camaze_keys_changed");
+  if (sessionFlag) sessionStorage.removeItem("camaze_keys_changed");
+  const forceRefresh = forceRefreshOverride || !!sessionFlag;
   const url = "/api/costs" + (forceRefresh ? "?refresh=1" : "");
 
   fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
@@ -401,15 +553,18 @@ function loadDashboard(accessToken) {
           '<div class="message">No providers connected yet. ' +
           '<a href="/integrations.html">Go to Integrations</a> to get started.</div>';
         renderModels([]);
+        renderSummary(null);
         return;
       }
       render(data);
       renderModels(data.models);
+      renderSummary(data.summary, accessToken);
     })
     .catch((err) => {
       document.getElementById("content").innerHTML =
         '<div class="message">Could not load cost data: ' + esc(err.message) + "</div>";
       renderModels([]);
+      renderSummary(null);
     });
 }
 

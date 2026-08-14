@@ -1,7 +1,7 @@
 // camaze — minimal AI spend tracker.
 // Vercel serverless function: proxies each provider's cost API so keys stay server-side.
 const cryptoLib = require("../lib/crypto");
-const { verifyUser, getAllProviderKeys } = require("../lib/supabase");
+const { verifyUser, getAllProviderKeys, getUserSettings } = require("../lib/supabase");
 
 const providers = [
   require("../providers/anthropic"),
@@ -111,6 +111,39 @@ async function fetchAllCosts(overrides, allowEnvFallback) {
   };
 }
 
+// Month-to-date + a simple linear forecast, computed from the `days` array
+// already fetched above — no extra provider API calls. The 31-day rolling
+// window `days` covers always includes the 1st of the current month (it
+// only needs to reach back at most 30 days from today to do so).
+function buildSummary(days, budget) {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const monthStartStr = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const daysElapsed = now.getUTCDate();
+
+  const mtd = days
+    .filter(d => d.date >= monthStartStr)
+    .reduce((sum, d) => sum + providers.reduce((s, p) => s + (d[p.name] || 0), 0), 0);
+
+  const forecast = daysElapsed > 0 ? (mtd / daysElapsed) * daysInMonth : 0;
+
+  return { mtd, forecast, days_elapsed: daysElapsed, days_in_month: daysInMonth, budget };
+}
+
+// Any failure here (not configured, no row yet) just means no budget set.
+async function resolveBudget(userId) {
+  if (!userId) return null;
+  try {
+    const settings = await getUserSettings(userId);
+    return settings?.monthly_budget ?? null;
+  } catch (e) {
+    console.warn(`Could not load budget: ${e.message}`);
+    return null;
+  }
+}
+
 const CACHE_TTL_MS = 5 * 60 * 1000;
 // Keyed per user (or "env" for anonymous/env-var requests) — a shared cache
 // would otherwise serve one user's provider totals to another.
@@ -148,13 +181,18 @@ module.exports = async (req, res) => {
         totals: { combined: 0 },
         errors: {},
         models: [],
+        summary: null,
         cached: false,
         cachedAt: new Date(now).toISOString(),
       });
       return;
     }
 
-    const data = await fetchAllCosts(overrides, localDevFallback);
+    const [costData, budget] = await Promise.all([
+      fetchAllCosts(overrides, localDevFallback),
+      resolveBudget(user?.id),
+    ]);
+    const data = { ...costData, summary: buildSummary(costData.days, budget) };
     cache.set(cacheKey, { data, fetchedAt: now });
     res.status(200).json({ ...data, cached: false, cachedAt: new Date(now).toISOString() });
   } catch (err) {

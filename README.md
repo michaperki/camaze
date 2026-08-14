@@ -14,9 +14,14 @@ Data is fetched fresh on every page load from each provider's cost API:
 
 Each provider lives in its own module under `providers/`, normalizing to
 `{ date, provider, amount_usd }` — adding a provider means adding one file and
-one line in `api/costs.js`. No database, no auth, no settings. If one or two
-providers' credentials are missing or their API errors, the rest still
-render, with a note saying which ones failed.
+one line in `api/costs.js`. If one or two providers' credentials are missing
+or their API errors, the rest still render, with a note saying which ones
+failed.
+
+Above the chart, a month-to-date summary shows spend so far this month, a
+linear forecast for month-end, and (once a budget is set on the dashboard)
+how much of it's been used — the forecast is colored red/yellow/green
+against the budget.
 
 Deploys as static + serverless on [Vercel](https://vercel.com): `public/index.html`
 is the static frontend, `api/costs.js` is the one serverless function.
@@ -84,7 +89,8 @@ you're reading this after the initial deploy).
 2. **Allow the redirect URLs** — Authentication → URL Configuration →
    Redirect URLs: add `http://localhost:3000/index.html` and
    `https://<your-vercel-domain>/index.html`.
-3. **Create the `user_provider_keys` table** — SQL Editor, run:
+3. **Create the `user_provider_keys` and `user_settings` tables** — SQL
+   Editor, run:
 
    ```sql
    create table public.user_provider_keys (
@@ -115,12 +121,26 @@ you're reading this after the initial deploy).
    create policy "Users can delete their own provider keys"
      on public.user_provider_keys for delete
      using (auth.uid() = user_id);
+
+   create table public.user_settings (
+     user_id uuid primary key references auth.users(id) on delete cascade,
+     monthly_budget numeric,
+     updated_at timestamptz not null default now()
+   );
+
+   alter table public.user_settings enable row level security;
+
+   create policy "Users can manage their own settings"
+     on public.user_settings for all
+     using (auth.uid() = user_id)
+     with check (auth.uid() = user_id);
    ```
 
-   `api/keys.js` and `api/costs.js` use the service role key server-side,
-   which bypasses RLS — every query is manually scoped to the caller's
-   `user_id` first. The policies above are still worth having as a second
-   line of defense against a future bug or a stray client-side query.
+   `api/keys.js`, `api/budget.js`, and `api/costs.js` use the service role
+   key server-side, which bypasses RLS — every query is manually scoped to
+   the caller's `user_id` first. The policies above are still worth having
+   as a second line of defense against a future bug or a stray client-side
+   query.
 
 4. **Add the remaining env vars** (see `.env.example` for details):
    - `SUPABASE_SERVICE_ROLE_KEY` — Project Settings → API → `service_role`.
