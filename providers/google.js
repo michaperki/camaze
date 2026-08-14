@@ -11,28 +11,45 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const BQ_BASE = "https://bigquery.googleapis.com/bigquery/v2";
 const SCOPE = "https://www.googleapis.com/auth/bigquery.readonly";
 
-// In-memory token cache — re-auth only when within 60s of expiry.
-let cachedToken = null; // { token, expiresAt }
+// In-memory token cache, keyed by service account email — one process can
+// serve multiple users, each with their own service account, so a single
+// global slot would hand one user's token to another.
+const tokenCache = new Map(); // client_email -> { token, expiresAt }
 
-async function getAccessToken() {
-  if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
-    return cachedToken.token;
+// Resolves the service account key object: an inline JSON string (per-user
+// key, passed by the caller) takes priority, then GOOGLE_SERVICE_ACCOUNT_JSON,
+// then the file at GOOGLE_APPLICATION_CREDENTIALS.
+function loadServiceAccountKey(inlineJson) {
+  const raw = inlineJson || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (raw) {
+    try {
+      return JSON.parse(raw);
+    } catch (e) {
+      throw new Error(`Could not parse service account JSON: ${e.message}`);
+    }
   }
-
-  const inlineJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   const keyPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  if (!inlineJson && !keyPath) {
-    throw new Error("Neither GOOGLE_SERVICE_ACCOUNT_JSON nor GOOGLE_APPLICATION_CREDENTIALS is set in .env");
+  if (!keyPath) {
+    throw new Error("No service account credentials: set GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS");
   }
-  let key;
   try {
-    key = JSON.parse(inlineJson ?? fs.readFileSync(keyPath, "utf8"));
+    return JSON.parse(fs.readFileSync(keyPath, "utf8"));
   } catch (e) {
-    const source = inlineJson ? "GOOGLE_SERVICE_ACCOUNT_JSON" : `service account key file (${keyPath})`;
-    throw new Error(`Could not read ${source}: ${e.message}`);
+    throw new Error(`Could not read service account key file (${keyPath}): ${e.message}`);
   }
+}
+
+// `inlineJson`: per-user service account JSON string, or undefined to use
+// the env-configured credentials.
+async function getAccessToken(inlineJson) {
+  const key = loadServiceAccountKey(inlineJson);
   if (!key.client_email || !key.private_key) {
-    throw new Error("Service account key file is missing client_email/private_key");
+    throw new Error("Service account key is missing client_email/private_key");
+  }
+
+  const cached = tokenCache.get(key.client_email);
+  if (cached && Date.now() < cached.expiresAt - 60_000) {
+    return cached.token;
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -62,16 +79,16 @@ async function getAccessToken() {
   if (!res.ok) {
     throw new Error(`Google auth failed: ${body?.error_description || body?.error || `HTTP ${res.status}`}`);
   }
-  cachedToken = { token: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 };
-  return cachedToken.token;
+  const token = { token: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 };
+  tokenCache.set(key.client_email, token);
+  return token.token;
 }
 
-async function bq(pathOrUrl, options = {}) {
-  const token = await getAccessToken();
+async function bq(pathOrUrl, accessToken, options = {}) {
   const res = await fetch(`${BQ_BASE}${pathOrUrl}`, {
     ...options,
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${accessToken}`,
       ...(options.body ? { "Content-Type": "application/json" } : {}),
       ...options.headers,
     },
@@ -87,10 +104,10 @@ async function bq(pathOrUrl, options = {}) {
 
 // Discover the export table by listing the dataset — its name embeds the
 // billing account ID, so it can't be hardcoded.
-async function findBillingTable(project, dataset) {
+async function findBillingTable(project, dataset, accessToken) {
   let body;
   try {
-    body = await bq(`/projects/${project}/datasets/${dataset}/tables?maxResults=100`);
+    body = await bq(`/projects/${project}/datasets/${dataset}/tables?maxResults=100`, accessToken);
   } catch (e) {
     if (e.status === 404) {
       throw new Error(`BigQuery dataset "${dataset}" not found in project "${project}" — check GOOGLE_BILLING_DATASET, or enable billing export first`);
@@ -106,13 +123,16 @@ async function findBillingTable(project, dataset) {
   return table;
 }
 
-// `start`: Date (UTC midnight). Throws on config/auth/query errors.
-async function fetchCosts(start) {
-  const project = process.env.GOOGLE_BILLING_PROJECT;
+// `start`: Date (UTC midnight). `overrides`: per-user
+// { serviceAccountJson, project, dataset }, each falling back to its env
+// var when absent. Throws on config/auth/query errors.
+async function fetchCosts(start, overrides = {}) {
+  const project = overrides.project || process.env.GOOGLE_BILLING_PROJECT;
   if (!project) throw new Error("GOOGLE_BILLING_PROJECT is not set in .env");
-  const dataset = process.env.GOOGLE_BILLING_DATASET || "billing_export";
+  const dataset = overrides.dataset || process.env.GOOGLE_BILLING_DATASET || "billing_export";
 
-  const table = await findBillingTable(project, dataset);
+  const accessToken = await getAccessToken(overrides.serviceAccountJson);
+  const table = await findBillingTable(project, dataset, accessToken);
 
   // Daily total = cost + credits, converted to USD via the export's own
   // conversion rate (1 for USD-billed accounts). All services for now.
@@ -128,7 +148,7 @@ async function fetchCosts(start) {
     GROUP BY day
     ORDER BY day`;
 
-  const result = await bq(`/projects/${project}/queries`, {
+  const result = await bq(`/projects/${project}/queries`, accessToken, {
     method: "POST",
     body: JSON.stringify({ query: sql, useLegacySql: false, timeoutMs: 30_000 }),
   });
@@ -148,4 +168,14 @@ async function fetchCosts(start) {
   });
 }
 
-module.exports = { name: "google", label: "Google", fetchCosts };
+// Confirms a { serviceAccountJson, project, dataset } combination can
+// authenticate and see the billing export dataset, before it's saved.
+// Doesn't run the full cost query — this alone catches the common
+// mistakes (bad key, wrong project, missing/not-yet-ready export).
+async function validateConfig({ serviceAccountJson, project, dataset } = {}) {
+  if (!project) throw new Error("Billing project is required");
+  const accessToken = await getAccessToken(serviceAccountJson);
+  await findBillingTable(project, dataset || "billing_export", accessToken);
+}
+
+module.exports = { name: "google", label: "Google", fetchCosts, validateConfig };

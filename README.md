@@ -21,6 +21,16 @@ render, with a note saying which ones failed.
 Deploys as static + serverless on [Vercel](https://vercel.com): `public/index.html`
 is the static frontend, `api/costs.js` is the one serverless function.
 
+Login is required ([Supabase](https://supabase.com) auth — Google OAuth or a
+magic link, no passwords). Once signed in, the **Integrations** page
+(`public/integrations.html`) lets each user connect their own provider keys
+instead of relying on the server's `.env`: keys are validated against the
+provider's API before saving, encrypted at rest (AES-256-GCM, `lib/crypto.js`)
+in a `user_provider_keys` table, and never sent back to the browser in full —
+only a last-4 hint. `api/costs.js` uses a signed-in user's own keys when
+present, falling back to the server's env vars otherwise (which is what keeps
+local development working without connecting anything).
+
 ## Setup
 
 1. Copy the env file and fill in whichever providers you use — any subset is
@@ -62,3 +72,63 @@ is the static frontend, `api/costs.js` is the one serverless function.
 
 Keys never leave the server — the page calls a local `/api/costs` proxy.
 API errors and empty periods are shown plainly on the page.
+
+## Auth + per-user keys setup
+
+Requires a [Supabase](https://supabase.com) project (already created if
+you're reading this after the initial deploy).
+
+1. **Enable sign-in methods** — Authentication → Providers:
+   - Google: turn it on and fill in your Google OAuth client ID/secret.
+   - Email: on by default (used for the magic link).
+2. **Allow the redirect URLs** — Authentication → URL Configuration →
+   Redirect URLs: add `http://localhost:3000/index.html` and
+   `https://<your-vercel-domain>/index.html`.
+3. **Create the `user_provider_keys` table** — SQL Editor, run:
+
+   ```sql
+   create table public.user_provider_keys (
+     id uuid primary key default gen_random_uuid(),
+     user_id uuid not null references auth.users(id) on delete cascade,
+     provider text not null check (provider in ('anthropic', 'openai', 'google')),
+     encrypted_data text not null,
+     key_hint text,
+     created_at timestamptz not null default now(),
+     updated_at timestamptz not null default now(),
+     unique (user_id, provider)
+   );
+
+   alter table public.user_provider_keys enable row level security;
+
+   create policy "Users can view their own provider keys"
+     on public.user_provider_keys for select
+     using (auth.uid() = user_id);
+
+   create policy "Users can insert their own provider keys"
+     on public.user_provider_keys for insert
+     with check (auth.uid() = user_id);
+
+   create policy "Users can update their own provider keys"
+     on public.user_provider_keys for update
+     using (auth.uid() = user_id);
+
+   create policy "Users can delete their own provider keys"
+     on public.user_provider_keys for delete
+     using (auth.uid() = user_id);
+   ```
+
+   `api/keys.js` and `api/costs.js` use the service role key server-side,
+   which bypasses RLS — every query is manually scoped to the caller's
+   `user_id` first. The policies above are still worth having as a second
+   line of defense against a future bug or a stray client-side query.
+
+4. **Add the remaining env vars** (see `.env.example` for details):
+   - `SUPABASE_SERVICE_ROLE_KEY` — Project Settings → API → `service_role`.
+     This one's a real secret (bypasses RLS) — never send it to the browser.
+   - `CAMAZE_ENCRYPTION_KEY` — a random 32-byte hex string, generate with
+     `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+     Use a different one per environment (local vs. deployed); losing it
+     makes stored keys undecryptable, so back it up somewhere.
+
+Once connected on the Integrations page, a user's own keys are used instead
+of the server's env vars for that user's dashboard requests.

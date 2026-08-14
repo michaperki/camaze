@@ -1,9 +1,10 @@
 // OpenAI organization Costs API -> normalized [{ date, provider, amount_usd }]
 const API_URL = "https://api.openai.com/v1/organization/costs";
 
-// `start`: Date (UTC midnight). Throws on missing key or API error.
-async function fetchCosts(start) {
-  const key = process.env.OPENAI_ADMIN_KEY;
+// `start`: Date (UTC midnight). `keyOverride`: use this key instead of the
+// env var (per-user keys). Throws on missing key or API error.
+async function fetchCosts(start, keyOverride) {
+  const key = keyOverride || process.env.OPENAI_ADMIN_KEY;
   if (!key) throw new Error("OPENAI_ADMIN_KEY is not set in .env");
 
   const usdByDay = new Map();
@@ -47,4 +48,24 @@ async function fetchCosts(start) {
   }));
 }
 
-module.exports = { name: "openai", label: "OpenAI", fetchCosts };
+// Minimal authenticated request — confirms a key works before it's saved,
+// without pulling a full cost report. Throws with the API's error message.
+async function validateKey(key) {
+  // start_time must be day-aligned (bucket_width=1d), same constraint as
+  // fetchCosts, to avoid an inverted-range error unrelated to the key itself.
+  const now = new Date();
+  const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+  const params = new URLSearchParams({
+    start_time: String(Math.floor(yesterday.getTime() / 1000)),
+    bucket_width: "1d",
+    limit: "1",
+  });
+  const res = await fetch(`${API_URL}?${params}`, {
+    headers: { Authorization: `Bearer ${key}` },
+  });
+  if (res.ok) return;
+  const body = await res.json().catch(() => null);
+  throw new Error(body?.error?.message || `HTTP ${res.status} from OpenAI API`);
+}
+
+module.exports = { name: "openai", label: "OpenAI", fetchCosts, validateKey };

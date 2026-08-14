@@ -51,8 +51,9 @@
     border-radius: 10px;
     padding: 20px 24px 16px;
   }
+  #chrome { display: none; }
   #topbar {
-    display: none;
+    display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 12px;
@@ -73,6 +74,26 @@
     cursor: pointer;
   }
   #topbar button:hover { color: var(--text-primary); }
+  nav.tabs {
+    display: flex;
+    gap: 16px;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 12px 20px 0;
+    font-size: 13px;
+  }
+  nav.tabs a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    padding-bottom: 8px;
+    border-bottom: 2px solid transparent;
+  }
+  nav.tabs a:hover { color: var(--text-primary); }
+  nav.tabs a.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--series-1);
+    font-weight: 600;
+  }
   .stat-label { font-size: 13px; color: var(--text-secondary); }
   .stat-value { font-size: 48px; font-weight: 600; line-height: 1.15; margin: 2px 0 8px; }
   .stat-meta { font-size: 12px; color: var(--text-muted); margin: -4px 0 8px; }
@@ -106,9 +127,15 @@
 </style>
 </head>
 <body>
-<div id="topbar">
-  <span id="user-email"></span>
-  <button id="signout-btn" type="button">Sign out</button>
+<div id="chrome">
+  <div id="topbar">
+    <span id="user-email"></span>
+    <button id="signout-btn" type="button">Sign out</button>
+  </div>
+  <nav class="tabs">
+    <a href="/index.html" class="active">Dashboard</a>
+    <a href="/integrations.html">Integrations</a>
+  </nav>
 </div>
 <main>
   <h1>camaze <span style="color:var(--text-muted);font-weight:400">— how much is that?!</span></h1>
@@ -278,8 +305,8 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
   wrap.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
 }
 
-function loadDashboard() {
-  fetch("/api/costs")
+function loadDashboard(accessToken) {
+  fetch("/api/costs", { headers: { Authorization: `Bearer ${accessToken}` } })
     .then(async (res) => {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -310,13 +337,13 @@ function loadDashboard() {
   }
 
   document.getElementById("user-email").textContent = session.user.email ?? "";
-  document.getElementById("topbar").style.display = "flex";
+  document.getElementById("chrome").style.display = "block";
   document.getElementById("signout-btn").addEventListener("click", async () => {
     await client.auth.signOut();
     window.location.replace("/login.html");
   });
 
-  loadDashboard();
+  loadDashboard(session.access_token);
 })();
 </script>
 </body>
