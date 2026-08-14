@@ -307,7 +307,13 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
 }
 
 function loadDashboard(accessToken) {
-  fetch("/api/costs", { headers: { Authorization: `Bearer ${accessToken}` } })
+  // Set by the Integrations page right after connecting/disconnecting a
+  // provider — bypass the cache once so the change shows up immediately.
+  const forceRefresh = sessionStorage.getItem("camaze_keys_changed");
+  if (forceRefresh) sessionStorage.removeItem("camaze_keys_changed");
+  const url = "/api/costs" + (forceRefresh ? "?refresh=1" : "");
+
+  fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
     .then(async (res) => {
       const data = await res.json();
       if (data.error) throw new Error(data.error);

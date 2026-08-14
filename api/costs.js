@@ -104,10 +104,14 @@ module.exports = async (req, res) => {
     const localDevFallback = !process.env.SUPABASE_SERVICE_ROLE_KEY;
     const user = await verifyUser(req.headers.authorization).catch(() => null);
     const cacheKey = user?.id || "env";
+    // Set by the dashboard right after a key was connected/disconnected on
+    // Integrations, so that change shows up immediately instead of waiting
+    // out a cached response computed from the old set of keys.
+    const forceRefresh = req.query?.refresh === "1";
 
     const now = Date.now();
     const cached = cache.get(cacheKey);
-    if (cached && now - cached.fetchedAt < CACHE_TTL_MS) {
+    if (!forceRefresh && cached && now - cached.fetchedAt < CACHE_TTL_MS) {
       res.status(200).json({ ...cached.data, cached: true, cachedAt: new Date(cached.fetchedAt).toISOString() });
       return;
     }

@@ -358,6 +358,7 @@ async function main() {
         .then(async (res) => {
           const data = await res.json();
           if (data.error) throw new Error(data.error);
+          sessionStorage.setItem("camaze_keys_changed", "1");
           return loadKeys();
         })
         .catch((err) => {
@@ -398,6 +399,7 @@ async function main() {
       .then(async (res) => {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
+        sessionStorage.setItem("camaze_keys_changed", "1");
         return loadKeys();
       })
       .catch((err) => {
