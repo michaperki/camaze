@@ -56,6 +56,7 @@ async function fetchAllCosts(overrides, allowEnvFallback) {
   const byDay = new Map(); // date -> { anthropic: usd, openai: usd, ... }
   const totals = { combined: 0 };
   for (const p of providers) totals[p.name] = 0;
+  const modelTotals = new Map(); // "provider:model" -> { provider, model, amount_usd }
 
   settled.forEach((result, i) => {
     const p = providers[i];
@@ -63,7 +64,9 @@ async function fetchAllCosts(overrides, allowEnvFallback) {
       errors[p.name] = result.reason.message;
       return;
     }
-    for (const { date, amount_usd } of result.value) {
+    const { days: providerDays, models: providerModels } = result.value;
+
+    for (const { date, amount_usd } of providerDays) {
       if (!Number.isFinite(amount_usd)) {
         console.warn(`Ignoring non-finite amount from ${p.name} on ${date}: ${amount_usd}`);
         continue;
@@ -72,6 +75,14 @@ async function fetchAllCosts(overrides, allowEnvFallback) {
       byDay.get(date)[p.name] = (byDay.get(date)[p.name] || 0) + amount_usd;
       totals[p.name] += amount_usd;
       totals.combined += amount_usd;
+    }
+
+    for (const { model, amount_usd } of providerModels || []) {
+      if (!model || !Number.isFinite(amount_usd)) continue;
+      const key = `${p.name}:${model}`;
+      const existing = modelTotals.get(key);
+      if (existing) existing.amount_usd += amount_usd;
+      else modelTotals.set(key, { provider: p.name, model, amount_usd });
     }
   });
 
@@ -84,11 +95,14 @@ async function fetchAllCosts(overrides, allowEnvFallback) {
     days.push(entry);
   }
 
+  const models = [...modelTotals.values()].sort((a, b) => b.amount_usd - a.amount_usd);
+
   return {
     providers: providers.map(p => ({ name: p.name, label: p.label, failed: p.name in errors })),
     days,
     totals,
     errors,
+    models,
   };
 }
 
@@ -128,6 +142,7 @@ module.exports = async (req, res) => {
         days: [],
         totals: { combined: 0 },
         errors: {},
+        models: [],
         cached: false,
         cachedAt: new Date(now).toISOString(),
       });

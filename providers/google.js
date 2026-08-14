@@ -125,7 +125,8 @@ async function findBillingTable(project, dataset, accessToken) {
 
 // `start`: Date (UTC midnight). `overrides`: per-user
 // { serviceAccountJson, project, dataset }, each falling back to its env
-// var when absent. Throws on config/auth/query errors.
+// var when absent. Throws on config/auth/query errors. Returns
+// { days, models } — both derived from the same query.
 async function fetchCosts(start, overrides = {}) {
   const project = overrides.project || process.env.GOOGLE_BILLING_PROJECT;
   if (!project) throw new Error("GOOGLE_BILLING_PROJECT is not set in .env");
@@ -136,16 +137,20 @@ async function fetchCosts(start, overrides = {}) {
 
   // Daily total = cost + credits, converted to USD via the export's own
   // conversion rate (1 for USD-billed accounts). All services for now.
+  // Grouped by SKU too (the closest thing to a "model" in billing export —
+  // e.g. specific Vertex AI/Gemini line items) so spend can be broken down
+  // per model alongside the daily totals, from the one query.
   const sql = `
     SELECT
       DATE(usage_start_time, 'UTC') AS day,
+      sku.description AS model,
       SUM(
         (cost + IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0))
         / IFNULL(currency_conversion_rate, 1)
       ) AS amount_usd
     FROM \`${project}.${dataset}.${table}\`
     WHERE usage_start_time >= TIMESTAMP('${start.toISOString()}')
-    GROUP BY day
+    GROUP BY day, model
     ORDER BY day`;
 
   const result = await bq(`/projects/${project}/queries`, accessToken, {
@@ -156,16 +161,27 @@ async function fetchCosts(start, overrides = {}) {
     throw new Error("BigQuery query did not complete within 30s — try again");
   }
 
-  // Rows arrive as { f: [{ v: "2026-08-01" }, { v: "12.34" }] } — values are
-  // strings; coerce at the boundary.
-  return (result.rows || []).map(row => {
+  // Rows arrive as { f: [{ v: "2026-08-01" }, { v: "Gemini ..." }, { v: "12.34" }] } —
+  // values are strings; coerce at the boundary.
+  const byDay = new Map();
+  const byModel = new Map();
+  for (const row of result.rows || []) {
     const date = row.f[0].v;
-    const amount = Number(row.f[1].v ?? 0);
+    const model = row.f[1].v;
+    const amount = Number(row.f[2].v ?? 0);
     if (!Number.isFinite(amount)) {
-      throw new Error(`Google returned a non-numeric amount for ${date}: ${JSON.stringify(row.f[1].v)}`);
+      throw new Error(`Google returned a non-numeric amount for ${date}: ${JSON.stringify(row.f[2].v)}`);
     }
-    return { date, provider: "google", amount_usd: amount };
-  });
+    byDay.set(date, (byDay.get(date) || 0) + amount);
+    if (model) {
+      byModel.set(model, (byModel.get(model) || 0) + amount);
+    }
+  }
+
+  return {
+    days: [...byDay].map(([date, amount_usd]) => ({ date, provider: "google", amount_usd })),
+    models: [...byModel].map(([model, amount_usd]) => ({ model, amount_usd })),
+  };
 }
 
 // Confirms a { serviceAccountJson, project, dataset } combination can

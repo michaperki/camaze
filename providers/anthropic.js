@@ -2,12 +2,14 @@
 const API_URL = "https://api.anthropic.com/v1/organizations/cost_report";
 
 // `start`: Date (UTC midnight). `keyOverride`: use this key instead of the
-// env var (per-user keys). Throws on missing key or API error.
+// env var (per-user keys). Throws on missing key or API error. Returns
+// { days, models } — both derived from the same request.
 async function fetchCosts(start, keyOverride) {
   const key = keyOverride || process.env.ANTHROPIC_ADMIN_KEY;
   if (!key) throw new Error("ANTHROPIC_ADMIN_KEY is not set in .env");
 
   const centsByDay = new Map();
+  const centsByModel = new Map();
   let page = null;
   do {
     const params = new URLSearchParams({
@@ -15,6 +17,11 @@ async function fetchCosts(start, keyOverride) {
       bucket_width: "1d",
       limit: "31",
     });
+    // "model" isn't a valid group_by on its own, but grouping by description
+    // is what makes the API populate per-line-item fields (model included) —
+    // without any group_by, results come back as one pre-aggregated row per
+    // day with everything (including model) null.
+    params.append("group_by[]", "description");
     if (page) params.set("page", page);
 
     const res = await fetch(`${API_URL}?${params}`, {
@@ -38,17 +45,26 @@ async function fetchCosts(start, keyOverride) {
           throw new Error(`Anthropic returned a non-numeric amount for ${day}: ${JSON.stringify(item.amount)}`);
         }
         cents += value;
+        if (item.model) {
+          centsByModel.set(item.model, (centsByModel.get(item.model) || 0) + value);
+        }
       }
       centsByDay.set(day, cents);
     }
     page = body.has_more ? body.next_page : null;
   } while (page);
 
-  return [...centsByDay].map(([date, cents]) => ({
-    date,
-    provider: "anthropic",
-    amount_usd: cents / 100,
-  }));
+  return {
+    days: [...centsByDay].map(([date, cents]) => ({
+      date,
+      provider: "anthropic",
+      amount_usd: cents / 100,
+    })),
+    models: [...centsByModel].map(([model, cents]) => ({
+      model,
+      amount_usd: cents / 100,
+    })),
+  };
 }
 
 // Minimal authenticated request — confirms a key works before it's saved,

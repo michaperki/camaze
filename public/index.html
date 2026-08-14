@@ -125,6 +125,29 @@
   #tooltip .t-date { color: var(--text-secondary); margin-bottom: 3px; }
   #tooltip .t-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
   #tooltip .t-value { font-weight: 600; font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 12px; }
+  #models-card { margin-top: 16px; }
+  .model-row {
+    display: grid;
+    grid-template-columns: minmax(0, 180px) 1fr auto;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+  }
+  .model-row:first-of-type { margin-top: 12px; }
+  .model-label {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .model-bar-track { background: var(--grid); border-radius: 3px; height: 14px; }
+  .model-bar { height: 100%; border-radius: 3px; min-width: 3px; }
+  .model-amount {
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+    text-align: right;
+  }
 </style>
 </head>
 <body>
@@ -143,6 +166,10 @@
   <p class="subtitle">AI API spend, daily, last 30 days (UTC)</p>
   <div class="card">
     <div id="content"><div class="message">Loading cost data&hellip;</div></div>
+  </div>
+  <div class="card" id="models-card" style="display:none">
+    <div class="stat-label">Spend by model, last 30 days</div>
+    <div id="models-content"></div>
   </div>
 </main>
 
@@ -306,6 +333,30 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
   wrap.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
 }
 
+function renderModels(models) {
+  const card = document.getElementById("models-card");
+  if (!models || models.length === 0) {
+    card.style.display = "none";
+    return;
+  }
+  card.style.display = "block";
+
+  const maxAmount = Math.max(...models.map(m => m.amount_usd));
+  document.getElementById("models-content").innerHTML = models.map(m => {
+    const pct = maxAmount > 0 ? Math.max((m.amount_usd / maxAmount) * 100, 1) : 0;
+    const fill = SERIES_VARS[m.provider] || "var(--text-muted)";
+    return (
+      '<div class="model-row">' +
+      `<span class="model-label">${esc(m.model)}</span>` +
+      '<div class="model-bar-track">' +
+      `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` +
+      "</div>" +
+      `<span class="model-amount">${fmtUSD(m.amount_usd)}</span>` +
+      "</div>"
+    );
+  }).join("");
+}
+
 function loadDashboard(accessToken) {
   // Set by the Integrations page right after connecting/disconnecting a
   // provider — bypass the cache once so the change shows up immediately.
@@ -321,13 +372,16 @@ function loadDashboard(accessToken) {
         document.getElementById("content").innerHTML =
           '<div class="message">No providers connected yet. ' +
           '<a href="/integrations.html">Go to Integrations</a> to get started.</div>';
+        renderModels([]);
         return;
       }
       render(data);
+      renderModels(data.models);
     })
     .catch((err) => {
       document.getElementById("content").innerHTML =
         '<div class="message">Could not load cost data: ' + esc(err.message) + "</div>";
+      renderModels([]);
     });
 }
 
