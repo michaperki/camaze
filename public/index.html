@@ -104,6 +104,7 @@
   .notes { margin: 0 0 12px; }
   .note { font-size: 13px; color: var(--text-secondary); padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; }
   .message { color: var(--text-secondary); font-size: 14px; padding: 24px 0; }
+  .message a { color: var(--series-1); }
   #chart-wrap { position: relative; }
   svg { display: block; width: 100%; height: auto; }
   .tick-label, .x-label { font-size: 11px; fill: var(--text-muted); }
@@ -310,6 +311,12 @@ function loadDashboard(accessToken) {
     .then(async (res) => {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+      if (data.no_keys) {
+        document.getElementById("content").innerHTML =
+          '<div class="message">No providers connected yet. ' +
+          '<a href="/integrations.html">Go to Integrations</a> to get started.</div>';
+        return;
+      }
       render(data);
     })
     .catch((err) => {

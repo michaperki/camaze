@@ -11,8 +11,7 @@ const providers = [
 
 // Loads and decrypts the logged-in user's stored provider keys into the
 // per-provider override shape each fetchCosts() accepts. Any failure here
-// (not configured, decrypt error, one bad row) just yields fewer overrides
-// — those providers then fall back to env vars like an anonymous request.
+// (decrypt error, one bad row) just yields fewer overrides for that provider.
 async function resolveOverrides(userId) {
   const overrides = {};
   if (!userId) return overrides;
@@ -36,12 +35,22 @@ async function resolveOverrides(userId) {
   return overrides;
 }
 
-async function fetchAllCosts(overrides) {
+// `allowEnvFallback`: local dev only (no SUPABASE_SERVICE_ROLE_KEY) — lets a
+// provider with no stored override fall back to its env var, same as before
+// per-user keys existed. In production, a provider with no override is
+// reported as not connected rather than silently trying env vars.
+async function fetchAllCosts(overrides, allowEnvFallback) {
   // Last 30 full days plus today, snapped to midnight UTC.
   const now = new Date();
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 30));
 
-  const settled = await Promise.allSettled(providers.map(p => p.fetchCosts(start, overrides[p.name])));
+  const settled = await Promise.allSettled(providers.map(p => {
+    const override = overrides[p.name];
+    if (!override && !allowEnvFallback) {
+      return Promise.reject(new Error("Not connected — add a key on the Integrations page."));
+    }
+    return p.fetchCosts(start, override);
+  }));
 
   const errors = {};
   const byDay = new Map(); // date -> { anthropic: usd, openai: usd, ... }
@@ -90,6 +99,9 @@ const cache = new Map(); // cacheKey -> { data, fetchedAt }
 
 module.exports = async (req, res) => {
   try {
+    // Local dev without a service role key can't look up per-user keys at
+    // all, so it keeps behaving like the pre-auth env-var-only setup.
+    const localDevFallback = !process.env.SUPABASE_SERVICE_ROLE_KEY;
     const user = await verifyUser(req.headers.authorization).catch(() => null);
     const cacheKey = user?.id || "env";
 
@@ -100,8 +112,25 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const overrides = await resolveOverrides(user?.id);
-    const data = await fetchAllCosts(overrides);
+    const overrides = localDevFallback ? {} : await resolveOverrides(user?.id);
+
+    if (!localDevFallback && Object.keys(overrides).length === 0) {
+      // Nothing connected, nothing to fetch — and deliberately not cached,
+      // so connecting a key on Integrations shows up on the next load
+      // instead of waiting out a stale "no keys" response.
+      res.status(200).json({
+        no_keys: true,
+        providers: [],
+        days: [],
+        totals: { combined: 0 },
+        errors: {},
+        cached: false,
+        cachedAt: new Date(now).toISOString(),
+      });
+      return;
+    }
+
+    const data = await fetchAllCosts(overrides, localDevFallback);
     cache.set(cacheKey, { data, fetchedAt: now });
     res.status(200).json({ ...data, cached: false, cachedAt: new Date(now).toISOString() });
   } catch (err) {
