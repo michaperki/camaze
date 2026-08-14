@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>camaze — sign in</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:        #f9f9f7;
+    --surface-1:   #fcfcfb;
+    --text-primary:#0b0b0b;
+    --text-secondary:#52514e;
+    --text-muted:  #898781;
+    --border:      rgba(11,11,11,0.10);
+    --accent:      #2a78d6;
+    --danger:      #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page:        #0d0d0d;
+      --surface-1:   #1a1a19;
+      --text-primary:#ffffff;
+      --text-secondary:#c3c2b7;
+      --text-muted:  #898781;
+      --border:      rgba(255,255,255,0.10);
+      --accent:      #3987e5;
+      --danger:      #e0655a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .card {
+    width: 100%;
+    max-width: 340px;
+    margin: 20px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px 24px;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; text-align: center; }
+  .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; text-align: center; }
+  button, input {
+    font: inherit;
+    font-size: 14px;
+  }
+  .btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 9px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .btn:hover { border-color: var(--text-muted); }
+  .btn:disabled { opacity: 0.6; cursor: default; }
+  .btn svg { flex: none; }
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 18px 0;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .divider::before, .divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  form { display: flex; flex-direction: column; gap: 10px; }
+  input[type="email"] {
+    padding: 9px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-primary);
+  }
+  input[type="email"]::placeholder { color: var(--text-muted); }
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .status { font-size: 13px; margin-top: 14px; text-align: center; }
+  .status.error { color: var(--danger); }
+  .status.success { color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>camaze</h1>
+  <p class="subtitle">Sign in to see AI API spend</p>
+
+  <button id="google-btn" class="btn" type="button">
+    <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.9-2.26 5.36-4.78 7.02l7.73 6c4.51-4.18 7.09-10.36 7.09-17.49z"/>
+      <path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.94 23.94 0 0 0 0 24c0 3.87.92 7.53 2.56 10.78l7.97-6.19z"/>
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.97 6.19C6.51 42.62 14.62 48 24 48z"/>
+    </svg>
+    Continue with Google
+  </button>
+
+  <div class="divider">or</div>
+
+  <form id="magic-link-form">
+    <input id="email-input" type="email" placeholder="you@example.com" autocomplete="email" required>
+    <button id="magic-link-btn" class="btn btn-primary" type="submit">Send magic link</button>
+  </form>
+
+  <div id="status" class="status" style="display:none"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const statusEl = document.getElementById("status");
+const googleBtn = document.getElementById("google-btn");
+const form = document.getElementById("magic-link-form");
+const emailInput = document.getElementById("email-input");
+const magicLinkBtn = document.getElementById("magic-link-btn");
+
+function showStatus(message, kind) {
+  statusEl.textContent = message;
+  statusEl.className = "status" + (kind ? " " + kind : "");
+  statusEl.style.display = "block";
+}
+
+const redirectTo = window.location.origin + "/index.html";
+
+(async () => {
+  const cfgRes = await fetch("/api/config");
+  const cfg = await cfgRes.json();
+  if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
+    showStatus("Auth is not configured (missing SUPABASE_URL/SUPABASE_ANON_KEY).", "error");
+    googleBtn.disabled = true;
+    magicLinkBtn.disabled = true;
+    return;
+  }
+
+  const client = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+
+  // Already signed in? Skip the login page.
+  const { data: { session } } = await client.auth.getSession();
+  if (session) {
+    window.location.replace("/index.html");
+    return;
+  }
+
+  googleBtn.addEventListener("click", async () => {
+    googleBtn.disabled = true;
+    const { error } = await client.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo },
+    });
+    if (error) {
+      showStatus(error.message, "error");
+      googleBtn.disabled = false;
+    }
+    // On success the browser navigates away to Google's consent screen.
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = emailInput.value.trim();
+    if (!email) return;
+    magicLinkBtn.disabled = true;
+    magicLinkBtn.textContent = "Sending…";
+    const { error } = await client.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo },
+    });
+    if (error) {
+      showStatus(error.message, "error");
+      magicLinkBtn.disabled = false;
+      magicLinkBtn.textContent = "Send magic link";
+      return;
+    }
+    form.style.display = "none";
+    showStatus(`Check ${email} for a sign-in link.`, "success");
+  });
+})();
+</script>
+</body>
+</html>

@@ -51,6 +51,28 @@
     border-radius: 10px;
     padding: 20px 24px 16px;
   }
+  #topbar {
+    display: none;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 20px 20px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  #topbar button {
+    font: inherit;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+  }
+  #topbar button:hover { color: var(--text-primary); }
   .stat-label { font-size: 13px; color: var(--text-secondary); }
   .stat-value { font-size: 48px; font-weight: 600; line-height: 1.15; margin: 2px 0 8px; }
   .stat-meta { font-size: 12px; color: var(--text-muted); margin: -4px 0 8px; }
@@ -84,6 +106,10 @@
 </style>
 </head>
 <body>
+<div id="topbar">
+  <span id="user-email"></span>
+  <button id="signout-btn" type="button">Sign out</button>
+</div>
 <main>
   <h1>camaze <span style="color:var(--text-muted);font-weight:400">— how much is that?!</span></h1>
   <p class="subtitle">AI API spend, daily, last 30 days (UTC)</p>
@@ -92,6 +118,7 @@
   </div>
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 const SERIES_VARS = {
   anthropic: "var(--series-1)",
@@ -251,16 +278,46 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
   wrap.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
 }
 
-fetch("/api/costs")
-  .then(async (res) => {
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    render(data);
-  })
-  .catch((err) => {
+function loadDashboard() {
+  fetch("/api/costs")
+    .then(async (res) => {
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      render(data);
+    })
+    .catch((err) => {
+      document.getElementById("content").innerHTML =
+        '<div class="message">Could not load cost data: ' + esc(err.message) + "</div>";
+    });
+}
+
+(async () => {
+  const cfgRes = await fetch("/api/config");
+  const cfg = await cfgRes.json();
+  if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
     document.getElementById("content").innerHTML =
-      '<div class="message">Could not load cost data: ' + esc(err.message) + "</div>";
+      '<div class="message">Auth is not configured (missing SUPABASE_URL/SUPABASE_ANON_KEY).</div>';
+    return;
+  }
+
+  const client = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+
+  // Also exchanges an OAuth code in the URL for a session, if present.
+  const { data: { session } } = await client.auth.getSession();
+  if (!session) {
+    window.location.replace("/login.html");
+    return;
+  }
+
+  document.getElementById("user-email").textContent = session.user.email ?? "";
+  document.getElementById("topbar").style.display = "flex";
+  document.getElementById("signout-btn").addEventListener("click", async () => {
+    await client.auth.signOut();
+    window.location.replace("/login.html");
   });
+
+  loadDashboard();
+})();
 </script>
 </body>
 </html>
