@@ -143,7 +143,7 @@ function showStatus(message, kind) {
   statusEl.style.display = "block";
 }
 
-const redirectTo = window.location.origin + "/index.html";
+const redirectTo = window.location.origin + "/dashboard.html";
 
 (async () => {
   const cfgRes = await fetch("/api/config");
@@ -160,7 +160,7 @@ const redirectTo = window.location.origin + "/index.html";
   // Already signed in? Skip the login page.
   const { data: { session } } = await client.auth.getSession();
   if (session) {
-    window.location.replace("/index.html");
+    window.location.replace("/dashboard.html");
     return;
   }
 

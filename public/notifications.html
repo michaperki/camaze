@@ -235,9 +235,9 @@
 <body>
 <header id="app-header">
   <div class="header-inner">
-    <a class="wordmark" href="/index.html">camaze</a>
+    <a class="wordmark" href="/dashboard.html">camaze</a>
     <nav class="tabs">
-      <a href="/index.html">Dashboard</a>
+      <a href="/dashboard.html">Dashboard</a>
       <a href="/integrations.html">Integrations</a>
       <a href="/notifications.html" class="active">Notifications</a>
     </nav>
@@ -301,7 +301,7 @@ function alertsSectionHtml(settings) {
   const budgetChecked = settings.budgetAlertsEnabled && settings.hasBudget;
 
   const thresholdSection = budgetDisabled
-    ? '<p class="field-note">Set a monthly budget on the <a href="/index.html">dashboard</a> to enable this.</p>'
+    ? '<p class="field-note">Set a monthly budget on the <a href="/dashboard.html">dashboard</a> to enable this.</p>'
     : `<div class="delivery-row${settings.budgetAlertsEnabled ? "" : " is-dimmed"}" id="threshold-row">
         <span class="field-label">Alert when forecast reaches</span>
         <input type="number" id="threshold-input" min="1" max="1000" step="1"

@@ -23,11 +23,14 @@ linear forecast for month-end, and (once a budget is set on the dashboard)
 how much of it's been used — the forecast is colored red/yellow/green
 against the budget.
 
-Deploys as static + serverless on [Vercel](https://vercel.com): `public/index.html`
-is the static frontend, `api/costs.js` is the one serverless function.
+Deploys as static + serverless on [Vercel](https://vercel.com):
+`public/index.html` is a public landing page, `public/dashboard.html` is the
+app itself, `api/costs.js` is the one serverless function behind it.
 
 Login is required ([Supabase](https://supabase.com) auth — Google OAuth or a
-magic link, no passwords). Once signed in, the **Integrations** page
+magic link, no passwords) to reach the dashboard; `/` shows the landing page
+to signed-out visitors and redirects straight to `/dashboard.html` for a
+visitor with an existing session. Once signed in, the **Integrations** page
 (`public/integrations.html`) lets each user connect their own provider keys
 instead of relying on the server's `.env`: keys are validated against the
 provider's API before saving, encrypted at rest (AES-256-GCM, `lib/crypto.js`)
@@ -113,8 +116,8 @@ you're reading this after the initial deploy).
    - Google: turn it on and fill in your Google OAuth client ID/secret.
    - Email: on by default (used for the magic link).
 2. **Allow the redirect URLs** — Authentication → URL Configuration →
-   Redirect URLs: add `http://localhost:3000/index.html` and
-   `https://<your-vercel-domain>/index.html`.
+   Redirect URLs: add `http://localhost:3000/dashboard.html` and
+   `https://<your-vercel-domain>/dashboard.html`.
 3. **Create the `user_provider_keys` and `user_settings` tables** — SQL
    Editor, run:
 
