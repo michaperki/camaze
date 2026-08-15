@@ -117,6 +117,7 @@
     margin-top: 14px;
   }
   .field-label { font-size: 12px; color: var(--text-muted); }
+  .field-note { font-size: 12px; color: var(--text-muted); margin: 6px 0 0; }
 
   button, input, select {
     font: inherit;
@@ -211,6 +212,7 @@ function digestSectionHtml(settings) {
           <option value="UTC">UTC</option>
         </select>
       </div>
+      <p class="field-note">Saved for later — right now every digest sends once a day at 9:00 AM UTC, regardless of the time above.</p>
 
       <div class="form-actions">
         <button class="btn btn-primary" id="save-btn" type="button">Save</button>

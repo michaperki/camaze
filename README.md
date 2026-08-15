@@ -40,10 +40,13 @@ The **Notifications** page (`public/notifications.html`) lets a user turn on
 a daily email digest — yesterday's spend, month-to-date, forecast, budget
 usage, and top models — sent via [Resend](https://resend.com)
 (`lib/digest.js`, `api/digest.js`). A Vercel Cron job hits
-`GET /api/cron/digest` every hour (`vercel.json`); it looks up whoever's
-`digest_hour` matches the current UTC hour in `user_notification_settings`
-and sends each of them the digest, authenticated by `CRON_SECRET` rather than
-a user session. Scheduling is hourly-resolution, UTC-only for now.
+`GET /api/cron/digest` once a day at a fixed hour (`vercel.json`) and sends
+to every user with the digest enabled in `user_notification_settings`,
+authenticated by `CRON_SECRET` rather than a user session. The settings page
+still has a delivery-time picker and stores it (`digest_hour`), but the cron
+doesn't act on it yet — Vercel Hobby plans cap cron jobs at once per day, so
+per-user delivery times need a Pro plan (hourly cron) to actually take
+effect.
 
 ## Setup
 
