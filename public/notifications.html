@@ -42,22 +42,36 @@
     color: var(--text-primary);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  main { max-width: 720px; margin: 0 auto; padding: 24px 20px 48px; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 20px 48px; }
   h1 { font-size: 18px; font-weight: 600; margin: 0 0 2px; }
   .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
-  #chrome { display: none; }
-  #topbar {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 12px;
+  #app-header { display: none; border-bottom: 1px solid var(--border); }
+  .header-inner {
     max-width: 960px;
     margin: 0 auto;
-    padding: 20px 20px 0;
+    padding: 0 20px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+  }
+  .wordmark {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-decoration: none;
+    flex: none;
+    letter-spacing: -0.01em;
+  }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     font-size: 13px;
     color: var(--text-secondary);
+    flex: none;
   }
-  #topbar button {
+  .header-right button {
     font: inherit;
     font-size: 12px;
     color: var(--text-secondary);
@@ -67,19 +81,17 @@
     padding: 4px 10px;
     cursor: pointer;
   }
-  #topbar button:hover { color: var(--text-primary); }
+  .header-right button:hover { color: var(--text-primary); }
   nav.tabs {
     display: flex;
     gap: 16px;
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 12px 20px 0;
     font-size: 13px;
+    flex: 1;
   }
   nav.tabs a {
     color: var(--text-secondary);
     text-decoration: none;
-    padding-bottom: 8px;
+    padding: 4px 0;
     border-bottom: 2px solid transparent;
   }
   nav.tabs a:hover { color: var(--text-primary); }
@@ -109,6 +121,11 @@
     cursor: pointer;
   }
   label.checkbox-row input { cursor: pointer; }
+  label.checkbox-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+  }
 
   .delivery-row {
     display: flex;
@@ -118,6 +135,15 @@
   }
   .field-label { font-size: 12px; color: var(--text-muted); }
   .field-note { font-size: 12px; color: var(--text-muted); margin: 6px 0 0; }
+  .pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 20px;
+    color: var(--text-secondary);
+    background: var(--page);
+    border: 1px solid var(--border);
+  }
 
   button, input, select {
     font: inherit;
@@ -130,6 +156,7 @@
     background: var(--page);
     color: var(--text-primary);
   }
+  select:disabled { opacity: 0.55; cursor: not-allowed; }
   .btn {
     display: inline-flex;
     align-items: center;
@@ -144,6 +171,8 @@
   .btn:hover { border-color: var(--text-muted); }
   .btn:disabled { opacity: 0.6; cursor: default; }
   .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-secondary { background: var(--surface-1); border-color: var(--text-muted); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
 
   .form-actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
   .form-error { font-size: 13px; color: var(--danger); }
@@ -162,17 +191,20 @@
 </style>
 </head>
 <body>
-<div id="chrome">
-  <div id="topbar">
-    <span id="user-email"></span>
-    <button id="signout-btn" type="button">Sign out</button>
+<header id="app-header">
+  <div class="header-inner">
+    <a class="wordmark" href="/index.html">camaze</a>
+    <nav class="tabs">
+      <a href="/index.html">Dashboard</a>
+      <a href="/integrations.html">Integrations</a>
+      <a href="/notifications.html" class="active">Notifications</a>
+    </nav>
+    <div class="header-right">
+      <span id="user-email"></span>
+      <button id="signout-btn" type="button">Sign out</button>
+    </div>
   </div>
-  <nav class="tabs">
-    <a href="/index.html">Dashboard</a>
-    <a href="/integrations.html">Integrations</a>
-    <a href="/notifications.html" class="active">Notifications</a>
-  </nav>
-</div>
+</header>
 <main>
   <h1>Notifications</h1>
   <p class="subtitle">Choose how camaze keeps you posted</p>
@@ -207,12 +239,13 @@ function digestSectionHtml(settings) {
 
       <div class="delivery-row">
         <span class="field-label">Delivery time</span>
-        <select id="hour-select">${hourOptionsHtml(settings.digestHour)}</select>
-        <select id="tz-select">
+        <select id="hour-select" disabled>${hourOptionsHtml(settings.digestHour)}</select>
+        <select id="tz-select" disabled>
           <option value="UTC">UTC</option>
         </select>
+        <span class="pill">Coming soon</span>
       </div>
-      <p class="field-note">Saved for later — right now every digest sends once a day at 9:00 AM UTC, regardless of the time above.</p>
+      <p class="field-note">Every digest currently sends once a day at 9:00 AM UTC.</p>
 
       <div class="form-actions">
         <button class="btn btn-primary" id="save-btn" type="button">Save</button>
@@ -220,7 +253,7 @@ function digestSectionHtml(settings) {
       </div>
 
       <div class="test-row">
-        <button class="btn" id="test-btn" type="button">Send test email now</button>
+        <button class="btn btn-secondary" id="test-btn" type="button">Send test email now</button>
         <span class="test-status" id="test-status"></span>
       </div>
     </div>`;
@@ -243,7 +276,7 @@ async function main() {
   }
 
   document.getElementById("user-email").textContent = session.user.email ?? "";
-  document.getElementById("chrome").style.display = "block";
+  document.getElementById("app-header").style.display = "block";
   document.getElementById("signout-btn").addEventListener("click", async () => {
     await client.auth.signOut();
     window.location.replace("/login.html");

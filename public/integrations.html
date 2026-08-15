@@ -46,22 +46,36 @@
     color: var(--text-primary);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  main { max-width: 720px; margin: 0 auto; padding: 24px 20px 48px; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 20px 48px; }
   h1 { font-size: 18px; font-weight: 600; margin: 0 0 2px; }
   .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
-  #chrome { display: none; }
-  #topbar {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 12px;
+  #app-header { display: none; border-bottom: 1px solid var(--border); }
+  .header-inner {
     max-width: 960px;
     margin: 0 auto;
-    padding: 20px 20px 0;
+    padding: 0 20px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+  }
+  .wordmark {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-decoration: none;
+    flex: none;
+    letter-spacing: -0.01em;
+  }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     font-size: 13px;
     color: var(--text-secondary);
+    flex: none;
   }
-  #topbar button {
+  .header-right button {
     font: inherit;
     font-size: 12px;
     color: var(--text-secondary);
@@ -71,19 +85,17 @@
     padding: 4px 10px;
     cursor: pointer;
   }
-  #topbar button:hover { color: var(--text-primary); }
+  .header-right button:hover { color: var(--text-primary); }
   nav.tabs {
     display: flex;
     gap: 16px;
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 12px 20px 0;
     font-size: 13px;
+    flex: 1;
   }
   nav.tabs a {
     color: var(--text-secondary);
     text-decoration: none;
-    padding-bottom: 8px;
+    padding: 4px 0;
     border-bottom: 2px solid transparent;
   }
   nav.tabs a:hover { color: var(--text-primary); }
@@ -110,7 +122,7 @@
   }
   .provider-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
   .provider-name { font-size: 15px; font-weight: 600; margin-right: auto; }
-  .time-estimate { font-size: 12px; color: var(--text-muted); }
+  .provider-meta { font-size: 12px; color: var(--text-muted); }
   .status-pill {
     font-size: 11px;
     font-weight: 600;
@@ -144,7 +156,18 @@
   .btn:hover { border-color: var(--text-muted); }
   .btn:disabled { opacity: 0.6; cursor: default; }
   .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn-danger { color: var(--danger); }
+  .btn-text {
+    background: none;
+    border: none;
+    padding: 4px 2px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    cursor: pointer;
+  }
+  .btn-text:hover { color: var(--danger); text-decoration-color: currentColor; }
+  .btn-text:disabled { opacity: 0.6; cursor: default; }
 
   .instructions { margin: 10px 0 12px; line-height: 1.6; }
   .instructions ol { margin: 6px 0 0; padding-left: 20px; }
@@ -167,17 +190,20 @@
 </style>
 </head>
 <body>
-<div id="chrome">
-  <div id="topbar">
-    <span id="user-email"></span>
-    <button id="signout-btn" type="button">Sign out</button>
+<header id="app-header">
+  <div class="header-inner">
+    <a class="wordmark" href="/index.html">camaze</a>
+    <nav class="tabs">
+      <a href="/index.html">Dashboard</a>
+      <a href="/integrations.html" class="active">Integrations</a>
+      <a href="/notifications.html">Notifications</a>
+    </nav>
+    <div class="header-right">
+      <span id="user-email"></span>
+      <button id="signout-btn" type="button">Sign out</button>
+    </div>
   </div>
-  <nav class="tabs">
-    <a href="/index.html">Dashboard</a>
-    <a href="/integrations.html" class="active">Integrations</a>
-    <a href="/notifications.html">Notifications</a>
-  </nav>
-</div>
+</header>
 <main>
   <h1>Integrations</h1>
   <p class="subtitle">Connect your own provider keys — stored encrypted, used only to fetch your spend</p>
@@ -234,6 +260,17 @@ const PROVIDERS = [
 
 const esc = (s) => String(s).replace(/</g, "&lt;");
 
+function fmtAgo(iso) {
+  if (!iso) return "";
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
 function fieldsHtml(provider) {
   if (provider.google) {
     return `
@@ -272,7 +309,7 @@ function cardHtml(provider, state) {
       <div class="provider-body">
         <div class="row">
           <span>${hint}</span>
-          <button class="btn btn-danger" type="button" data-action="disconnect" data-provider="${provider.name}">Disconnect</button>
+          <button class="btn-text" type="button" data-action="disconnect" data-provider="${provider.name}">Disconnect</button>
         </div>
       </div>`;
   } else {
@@ -291,12 +328,16 @@ function cardHtml(provider, state) {
       </div>`;
   }
 
+  const meta = connected
+    ? `Connected ${esc(fmtAgo(state.updatedAt))}`
+    : esc(provider.time);
+
   return `
     <div class="provider-card" data-card="${provider.name}">
       <div class="provider-head">
         <span class="provider-swatch" style="background:${provider.swatch}"></span>
         <span class="provider-name">${esc(provider.label)}</span>
-        <span class="time-estimate">${esc(provider.time)}</span>
+        <span class="provider-meta">${meta}</span>
         ${statusHtml}
       </div>
       ${body}
@@ -325,7 +366,7 @@ async function main() {
   }
 
   document.getElementById("user-email").textContent = session.user.email ?? "";
-  document.getElementById("chrome").style.display = "block";
+  document.getElementById("app-header").style.display = "block";
   document.getElementById("signout-btn").addEventListener("click", async () => {
     await client.auth.signOut();
     window.location.replace("/login.html");
@@ -354,6 +395,7 @@ async function main() {
     const disconnectBtn = e.target.closest('[data-action="disconnect"]');
     if (disconnectBtn) {
       const provider = disconnectBtn.dataset.provider;
+      if (!confirm(`Disconnect ${provider}? camaze will stop tracking its spend until you reconnect.`)) return;
       disconnectBtn.disabled = true;
       fetch(`/api/keys?provider=${encodeURIComponent(provider)}`, { method: "DELETE", headers: authHeaders })
         .then(async (res) => {
