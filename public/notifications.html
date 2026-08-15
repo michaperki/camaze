@@ -6,7 +6,7 @@
 <title>camaze — notifications</title>
 <style>
   :root {
-    color-scheme: light;
+    color-scheme: dark light;
     --page:        #f9f9f7;
     --surface-1:   #fcfcfb;
     --text-primary:#0b0b0b;
@@ -21,7 +21,6 @@
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      color-scheme: dark;
       --page:        #0d0d0d;
       --surface-1:   #1a1a19;
       --text-primary:#ffffff;
@@ -36,6 +35,7 @@
     }
   }
   * { box-sizing: border-box; }
+  html { background: var(--page); }
   body {
     margin: 0;
     background: var(--page);
@@ -43,9 +43,8 @@
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   main { max-width: 960px; margin: 0 auto; padding: 24px 20px 48px; }
-  h1 { font-size: 18px; font-weight: 600; margin: 0 0 2px; }
   .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
-  #app-header { display: none; border-bottom: 1px solid var(--border); }
+  #app-header { border-bottom: 1px solid var(--border); }
   .header-inner {
     max-width: 960px;
     margin: 0 auto;
@@ -70,6 +69,7 @@
     font-size: 13px;
     color: var(--text-secondary);
     flex: none;
+    visibility: hidden;
   }
   .header-right button {
     font: inherit;
@@ -87,18 +87,27 @@
     gap: 16px;
     font-size: 13px;
     flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
+  nav.tabs::-webkit-scrollbar { display: none; }
   nav.tabs a {
     color: var(--text-secondary);
     text-decoration: none;
     padding: 4px 0;
     border-bottom: 2px solid transparent;
+    white-space: nowrap;
   }
   nav.tabs a:hover { color: var(--text-primary); }
   nav.tabs a.active {
     color: var(--text-primary);
     border-bottom-color: var(--series-1);
     font-weight: 600;
+  }
+  @media (max-width: 700px) {
+    .header-inner { padding: 0 14px; gap: 14px; }
+    #user-email { display: none; }
   }
 
   .message { color: var(--text-secondary); font-size: 14px; padding: 24px 0; }
@@ -122,17 +131,46 @@
   }
   label.checkbox-row input { cursor: pointer; }
   label.checkbox-row input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: none;
     width: 16px;
     height: 16px;
-    accent-color: var(--accent);
+    margin: 0;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    position: relative;
   }
+  label.checkbox-row input[type="checkbox"]:hover { border-color: var(--text-muted); }
+  label.checkbox-row input[type="checkbox"]:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  label.checkbox-row input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  label.checkbox-row input[type="checkbox"]:disabled { opacity: 0.6; cursor: default; }
+  .save-status { font-size: 12px; }
+  .save-status.ok { color: var(--ok-fg); }
+  .save-status.error { color: var(--danger); }
 
   .delivery-row {
     display: flex;
     align-items: center;
     gap: 10px;
     margin-top: 14px;
+    transition: opacity 0.15s;
   }
+  .delivery-row.is-dimmed { opacity: 0.45; }
   .field-label { font-size: 12px; color: var(--text-muted); }
   .field-note { font-size: 12px; color: var(--text-muted); margin: 6px 0 0; }
   .pill {
@@ -170,12 +208,8 @@
   }
   .btn:hover { border-color: var(--text-muted); }
   .btn:disabled { opacity: 0.6; cursor: default; }
-  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn-secondary { background: var(--surface-1); border-color: var(--text-muted); }
   .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
-
-  .form-actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
-  .form-error { font-size: 13px; color: var(--danger); }
 
   .test-row {
     display: flex;
@@ -199,14 +233,13 @@
       <a href="/integrations.html">Integrations</a>
       <a href="/notifications.html" class="active">Notifications</a>
     </nav>
-    <div class="header-right">
+    <div class="header-right" id="header-right">
       <span id="user-email"></span>
       <button id="signout-btn" type="button">Sign out</button>
     </div>
   </div>
 </header>
 <main>
-  <h1>Notifications</h1>
   <p class="subtitle">Choose how camaze keeps you posted</p>
   <div id="content"><div class="message">Loading&hellip;</div></div>
 </main>
@@ -235,9 +268,10 @@ function digestSectionHtml(settings) {
       <label class="checkbox-row">
         <input type="checkbox" id="digest-enabled" ${settings.digestEnabled ? "checked" : ""}>
         Enable daily digest
+        <span class="save-status" id="digest-save-status"></span>
       </label>
 
-      <div class="delivery-row">
+      <div class="delivery-row${settings.digestEnabled ? "" : " is-dimmed"}" id="delivery-row">
         <span class="field-label">Delivery time</span>
         <select id="hour-select" disabled>${hourOptionsHtml(settings.digestHour)}</select>
         <select id="tz-select" disabled>
@@ -246,11 +280,6 @@ function digestSectionHtml(settings) {
         <span class="pill">Coming soon</span>
       </div>
       <p class="field-note">Every digest currently sends once a day at 9:00 AM UTC.</p>
-
-      <div class="form-actions">
-        <button class="btn btn-primary" id="save-btn" type="button">Save</button>
-        <span class="form-error" id="save-error"></span>
-      </div>
 
       <div class="test-row">
         <button class="btn btn-secondary" id="test-btn" type="button">Send test email now</button>
@@ -276,7 +305,7 @@ async function main() {
   }
 
   document.getElementById("user-email").textContent = session.user.email ?? "";
-  document.getElementById("app-header").style.display = "block";
+  document.getElementById("header-right").style.visibility = "visible";
   document.getElementById("signout-btn").addEventListener("click", async () => {
     await client.auth.signOut();
     window.location.replace("/login.html");
@@ -291,15 +320,18 @@ async function main() {
 
   content.innerHTML = digestSectionHtml(settings);
 
-  const saveBtn = document.getElementById("save-btn");
-  const saveError = document.getElementById("save-error");
-  saveBtn.addEventListener("click", () => {
-    saveError.textContent = "";
-    saveBtn.disabled = true;
-    saveBtn.textContent = "Saving…";
+  const digestCheckbox = document.getElementById("digest-enabled");
+  const saveStatus = document.getElementById("digest-save-status");
+  const deliveryRow = document.getElementById("delivery-row");
+  digestCheckbox.addEventListener("change", () => {
+    const enabled = digestCheckbox.checked;
+    deliveryRow.classList.toggle("is-dimmed", !enabled);
+    saveStatus.className = "save-status";
+    saveStatus.textContent = "";
+    digestCheckbox.disabled = true;
 
     const body = {
-      digestEnabled: document.getElementById("digest-enabled").checked,
+      digestEnabled: enabled,
       digestHour: Number(document.getElementById("hour-select").value),
     };
 
@@ -311,14 +343,17 @@ async function main() {
       .then(async (r) => {
         const data = await r.json();
         if (data.error) throw new Error(data.error);
-        saveBtn.textContent = "Saved";
-        setTimeout(() => { saveBtn.textContent = "Save"; }, 1500);
+        saveStatus.textContent = "Saved";
+        saveStatus.className = "save-status ok";
+        setTimeout(() => { saveStatus.textContent = ""; saveStatus.className = "save-status"; }, 1500);
       })
       .catch((err) => {
-        saveError.textContent = err.message;
-        saveBtn.textContent = "Save";
+        digestCheckbox.checked = !enabled;
+        deliveryRow.classList.toggle("is-dimmed", !digestCheckbox.checked);
+        saveStatus.textContent = err.message;
+        saveStatus.className = "save-status error";
       })
-      .finally(() => { saveBtn.disabled = false; });
+      .finally(() => { digestCheckbox.disabled = false; });
   });
 
   const testBtn = document.getElementById("test-btn");

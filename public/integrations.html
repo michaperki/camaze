@@ -6,7 +6,7 @@
 <title>camaze — integrations</title>
 <style>
   :root {
-    color-scheme: light;
+    color-scheme: dark light;
     --page:        #f9f9f7;
     --surface-1:   #fcfcfb;
     --text-primary:#0b0b0b;
@@ -23,7 +23,6 @@
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      color-scheme: dark;
       --page:        #0d0d0d;
       --surface-1:   #1a1a19;
       --text-primary:#ffffff;
@@ -40,6 +39,7 @@
     }
   }
   * { box-sizing: border-box; }
+  html { background: var(--page); }
   body {
     margin: 0;
     background: var(--page);
@@ -47,9 +47,8 @@
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   main { max-width: 960px; margin: 0 auto; padding: 24px 20px 48px; }
-  h1 { font-size: 18px; font-weight: 600; margin: 0 0 2px; }
   .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
-  #app-header { display: none; border-bottom: 1px solid var(--border); }
+  #app-header { border-bottom: 1px solid var(--border); }
   .header-inner {
     max-width: 960px;
     margin: 0 auto;
@@ -74,6 +73,7 @@
     font-size: 13px;
     color: var(--text-secondary);
     flex: none;
+    visibility: hidden;
   }
   .header-right button {
     font: inherit;
@@ -91,18 +91,27 @@
     gap: 16px;
     font-size: 13px;
     flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
+  nav.tabs::-webkit-scrollbar { display: none; }
   nav.tabs a {
     color: var(--text-secondary);
     text-decoration: none;
     padding: 4px 0;
     border-bottom: 2px solid transparent;
+    white-space: nowrap;
   }
   nav.tabs a:hover { color: var(--text-primary); }
   nav.tabs a.active {
     color: var(--text-primary);
     border-bottom-color: var(--series-1);
     font-weight: 600;
+  }
+  @media (max-width: 700px) {
+    .header-inner { padding: 0 14px; gap: 14px; }
+    #user-email { display: none; }
   }
 
   .message { color: var(--text-secondary); font-size: 14px; padding: 24px 0; }
@@ -198,14 +207,13 @@
       <a href="/integrations.html" class="active">Integrations</a>
       <a href="/notifications.html">Notifications</a>
     </nav>
-    <div class="header-right">
+    <div class="header-right" id="header-right">
       <span id="user-email"></span>
       <button id="signout-btn" type="button">Sign out</button>
     </div>
   </div>
 </header>
 <main>
-  <h1>Integrations</h1>
   <p class="subtitle">Connect your own provider keys — stored encrypted, used only to fetch your spend</p>
   <div id="content"><div class="message">Loading&hellip;</div></div>
 </main>
@@ -259,17 +267,6 @@ const PROVIDERS = [
 ];
 
 const esc = (s) => String(s).replace(/</g, "&lt;");
-
-function fmtAgo(iso) {
-  if (!iso) return "";
-  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return `${days}d ago`;
-}
 
 function fieldsHtml(provider) {
   if (provider.google) {
@@ -328,9 +325,11 @@ function cardHtml(provider, state) {
       </div>`;
   }
 
-  const meta = connected
-    ? `Connected ${esc(fmtAgo(state.updatedAt))}`
-    : esc(provider.time);
+  // No real last-sync timestamp exists on the backend — the key record's
+  // updatedAt is set once, when the credential is saved, and never again.
+  // Showing it as "Connected Xh ago" would look like a live signal but
+  // never change, so once connected there's nothing honest to show here.
+  const meta = connected ? "" : esc(provider.time);
 
   return `
     <div class="provider-card" data-card="${provider.name}">
@@ -366,7 +365,7 @@ async function main() {
   }
 
   document.getElementById("user-email").textContent = session.user.email ?? "";
-  document.getElementById("app-header").style.display = "block";
+  document.getElementById("header-right").style.visibility = "visible";
   document.getElementById("signout-btn").addEventListener("click", async () => {
     await client.auth.signOut();
     window.location.replace("/login.html");

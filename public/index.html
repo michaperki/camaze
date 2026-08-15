@@ -6,7 +6,7 @@
 <title>camaze — how much is that?!</title>
 <style>
   :root {
-    color-scheme: light;
+    color-scheme: dark light;
     --page:        #f9f9f7;
     --surface-1:   #fcfcfb;
     --text-primary:#0b0b0b;
@@ -24,7 +24,6 @@
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      color-scheme: dark;
       --page:        #0d0d0d;
       --surface-1:   #1a1a19;
       --text-primary:#ffffff;
@@ -42,6 +41,7 @@
     }
   }
   * { box-sizing: border-box; }
+  html { background: var(--page); }
   body {
     margin: 0;
     background: var(--page);
@@ -49,7 +49,6 @@
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   main { max-width: 960px; margin: 0 auto; padding: 32px 20px 48px; }
-  h1 { font-size: 18px; font-weight: 600; margin: 0 0 2px; }
   .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
   .card {
     background: var(--surface-1);
@@ -57,7 +56,7 @@
     border-radius: 10px;
     padding: 20px 24px 16px;
   }
-  #app-header { display: none; border-bottom: 1px solid var(--border); }
+  #app-header { border-bottom: 1px solid var(--border); }
   .header-inner {
     max-width: 960px;
     margin: 0 auto;
@@ -82,6 +81,7 @@
     font-size: 13px;
     color: var(--text-secondary);
     flex: none;
+    visibility: hidden;
   }
   .header-right button {
     font: inherit;
@@ -99,18 +99,28 @@
     gap: 16px;
     font-size: 13px;
     flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
+  nav.tabs::-webkit-scrollbar { display: none; }
   nav.tabs a {
     color: var(--text-secondary);
     text-decoration: none;
     padding: 4px 0;
     border-bottom: 2px solid transparent;
+    white-space: nowrap;
   }
   nav.tabs a:hover { color: var(--text-primary); }
   nav.tabs a.active {
     color: var(--text-primary);
     border-bottom-color: var(--series-1);
     font-weight: 600;
+  }
+  @media (max-width: 700px) {
+    .header-inner { padding: 0 14px; gap: 14px; }
+    #user-email { display: none; }
+    #summary-row { grid-template-columns: 1fr; }
   }
   .stat-label { font-size: 13px; color: var(--text-secondary); }
   .chart-total { font-size: 12px; color: var(--text-secondary); margin: 0 0 10px; }
@@ -158,9 +168,18 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-align: right;
   }
   .model-bar-track { border-radius: 3px; height: 14px; }
   .model-bar { height: 100%; border-radius: 3px; min-width: 3px; }
+  .model-stats { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; }
+  .model-pct {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    min-width: 30px;
+    text-align: right;
+  }
   .model-amount {
     font-size: 13px;
     font-variant-numeric: tabular-nums;
@@ -228,14 +247,13 @@
       <a href="/integrations.html">Integrations</a>
       <a href="/notifications.html">Notifications</a>
     </nav>
-    <div class="header-right">
+    <div class="header-right" id="header-right">
       <span id="user-email"></span>
       <button id="signout-btn" type="button">Sign out</button>
     </div>
   </div>
 </header>
 <main>
-  <h1>Dashboard</h1>
   <p class="subtitle">AI API spend, daily, last 30 days (UTC)</p>
   <div id="summary-row">
     <div class="stat-card">
@@ -358,12 +376,19 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
   }
 
   // Stacked bars: fixed provider order bottom-up; topmost visible segment gets
-  // the rounded cap; a 2px surface gap separates touching segments.
+  // the rounded cap; a 2px surface gap separates touching segments. The
+  // `days` array is zero-filled for the full window (never sparse), so a day
+  // with no segments is a measured $0, not a gap in the data — mark it with
+  // a thin baseline tick instead of leaving it blank.
   days.forEach((d, i) => {
     const x = m.left + i * band + (band - barW) / 2;
     const segs = active
       .map(p => ({ name: p.name, usd: d[p.name] }))
       .filter(seg => seg.usd > 0);
+    if (segs.length === 0) {
+      s += `<rect x="${x}" y="${baseline - 0.5}" width="${barW}" height="1" fill="var(--baseline)"/>`;
+      return;
+    }
     let cum = 0;
     segs.forEach((seg, k) => {
       const bottomVal = cum, topVal = cum + seg.usd;
@@ -457,8 +482,11 @@ function renderModels(models) {
   card.style.display = "block";
 
   const maxAmount = Math.max(...models.map(m => m.amount_usd));
+  const totalAmount = models.reduce((sum, m) => sum + m.amount_usd, 0);
   document.getElementById("models-content").innerHTML = models.map(m => {
     const pct = maxAmount > 0 ? Math.max((m.amount_usd / maxAmount) * 100, 1) : 0;
+    const share = totalAmount > 0 ? (m.amount_usd / totalAmount) * 100 : 0;
+    const shareLabel = share > 0 && share < 1 ? share.toFixed(1) : Math.round(share);
     const fill = SERIES_VARS[m.provider] || "var(--text-muted)";
     const label = prettifyModel(m.provider, m.model);
     return (
@@ -467,7 +495,10 @@ function renderModels(models) {
       '<div class="model-bar-track">' +
       `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` +
       "</div>" +
+      '<span class="model-stats">' +
+      `<span class="model-pct">${shareLabel}%</span>` +
       `<span class="model-amount">${fmtUSD(m.amount_usd)}</span>` +
+      "</span>" +
       "</div>"
     );
   }).join("");
@@ -610,7 +641,7 @@ function loadDashboard(accessToken, forceRefreshOverride) {
   }
 
   document.getElementById("user-email").textContent = session.user.email ?? "";
-  document.getElementById("app-header").style.display = "block";
+  document.getElementById("header-right").style.visibility = "visible";
   document.getElementById("signout-btn").addEventListener("click", async () => {
     await client.auth.signOut();
     window.location.replace("/login.html");
