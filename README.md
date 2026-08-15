@@ -48,6 +48,20 @@ doesn't act on it yet — Vercel Hobby plans cap cron jobs at once per day, so
 per-user delivery times need a Pro plan (hourly cron) to actually take
 effect.
 
+The same cron run also checks for **spike and budget alerts** (`lib/alerts.js`,
+`lib/alertRunner.js`, `lib/alertEmail.js`) — a separate pass over a separate
+user list (`spike_alerts_enabled`/`budget_alerts_enabled`), independent of
+whether the digest itself is on. A spike alert fires when a day's spend is
+at least 3x the trailing 7-day median (computed live from the same 30-day
+window `api/costs.js` fetches — camaze keeps no separate spend-history
+table) and at least $1; a budget alert fires when the month-end forecast
+crosses a user-configurable percentage of their budget (default 80%). Each
+is sent as its own email, not folded into the digest, and each fires at
+most once (per day for spikes, per threshold per month for budgets) via an
+insert-with-conflict-ignore into `alert_state`. `GET /api/alerts/dryrun`
+replays spike detection against the last 30 real days without sending
+anything, for tuning the thresholds in `lib/alerts.js`.
+
 ## Setup
 
 1. Copy the env file and fill in whichever providers you use — any subset is
@@ -137,6 +151,7 @@ you're reading this after the initial deploy).
    create table public.user_settings (
      user_id uuid primary key references auth.users(id) on delete cascade,
      monthly_budget numeric,
+     alert_threshold numeric not null default 80,
      updated_at timestamptz not null default now()
    );
 
@@ -151,6 +166,8 @@ you're reading this after the initial deploy).
      user_id uuid primary key references auth.users(id) on delete cascade,
      digest_enabled boolean not null default false,
      digest_hour integer not null default 9,
+     spike_alerts_enabled boolean not null default true,
+     budget_alerts_enabled boolean not null default true,
      updated_at timestamptz not null default now()
    );
 
@@ -160,13 +177,26 @@ you're reading this after the initial deploy).
      on public.user_notification_settings for all
      using (auth.uid() = user_id)
      with check (auth.uid() = user_id);
+
+   create table public.alert_state (
+     user_id uuid not null references auth.users(id) on delete cascade,
+     alert_key text not null,
+     fired_at timestamptz not null default now(),
+     primary key (user_id, alert_key)
+   );
+
+   alter table public.alert_state enable row level security;
+
+   create policy "Users manage own alert state"
+     on public.alert_state for all
+     using (auth.uid() = user_id) with check (auth.uid() = user_id);
    ```
 
    `api/keys.js`, `api/budget.js`, `api/costs.js`, `api/notifications.js`,
-   and `api/digest.js` use the service role key server-side, which bypasses
-   RLS — every query is manually scoped to the caller's `user_id` first. The
-   policies above are still worth having as a second line of defense against
-   a future bug or a stray client-side query.
+   `api/digest.js`, and `api/alerts/*` use the service role key server-side,
+   which bypasses RLS — every query is manually scoped to the caller's
+   `user_id` first. The policies above are still worth having as a second
+   line of defense against a future bug or a stray client-side query.
 
 4. **Add the remaining env vars** (see `.env.example` for details):
    - `SUPABASE_SERVICE_ROLE_KEY` — Project Settings → API → `service_role`.

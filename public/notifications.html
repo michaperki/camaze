@@ -195,6 +195,14 @@
     color: var(--text-primary);
   }
   select:disabled { opacity: 0.55; cursor: not-allowed; }
+  input[type="number"] {
+    padding: 7px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-primary);
+  }
+  input[type="number"]:disabled { opacity: 0.55; cursor: not-allowed; }
   .btn {
     display: inline-flex;
     align-items: center;
@@ -288,6 +296,46 @@ function digestSectionHtml(settings) {
     </div>`;
 }
 
+function alertsSectionHtml(settings) {
+  const budgetDisabled = !settings.hasBudget;
+  const budgetChecked = settings.budgetAlertsEnabled && settings.hasBudget;
+
+  const thresholdSection = budgetDisabled
+    ? '<p class="field-note">Set a monthly budget on the <a href="/index.html">dashboard</a> to enable this.</p>'
+    : `<div class="delivery-row${settings.budgetAlertsEnabled ? "" : " is-dimmed"}" id="threshold-row">
+        <span class="field-label">Alert when forecast reaches</span>
+        <input type="number" id="threshold-input" min="1" max="1000" step="1"
+          value="${settings.alertThreshold}" ${settings.budgetAlertsEnabled ? "" : "disabled"}
+          style="width:70px;">
+        <span class="field-label">% of budget</span>
+      </div>`;
+
+  return `
+    <div class="section-card" id="alerts-section">
+      <div class="section-title">Alerts</div>
+      <p class="section-desc">Get emailed the moment something looks off &mdash; sent separately from the daily digest.</p>
+
+      <label class="checkbox-row">
+        <input type="checkbox" id="spike-enabled" ${settings.spikeAlertsEnabled ? "checked" : ""}>
+        Spike alerts
+        <span class="save-status" id="spike-save-status"></span>
+      </label>
+      <p class="field-note">When a day's spend is at least 3&times; your trailing 7-day median (and at least $1).</p>
+
+      <label class="checkbox-row" style="margin-top:16px;">
+        <input type="checkbox" id="budget-alerts-enabled" ${budgetChecked ? "checked" : ""} ${budgetDisabled ? "disabled" : ""}>
+        Budget threshold alerts
+        <span class="save-status" id="budget-save-status"></span>
+      </label>
+      ${thresholdSection}
+
+      <div class="test-row">
+        <button class="btn btn-secondary" id="alert-test-btn" type="button">Send test alert</button>
+        <span class="test-status" id="alert-test-status"></span>
+      </div>
+    </div>`;
+}
+
 async function main() {
   const cfgRes = await fetch("/api/config");
   const cfg = await cfgRes.json();
@@ -318,7 +366,7 @@ async function main() {
   const settings = await res.json();
   if (settings.error) throw new Error(settings.error);
 
-  content.innerHTML = digestSectionHtml(settings);
+  content.innerHTML = digestSectionHtml(settings) + alertsSectionHtml(settings);
 
   const digestCheckbox = document.getElementById("digest-enabled");
   const saveStatus = document.getElementById("digest-save-status");
@@ -378,6 +426,115 @@ async function main() {
       .finally(() => {
         testBtn.disabled = false;
         testBtn.textContent = "Send test email now";
+      });
+  });
+
+  const spikeCheckbox = document.getElementById("spike-enabled");
+  const spikeSaveStatus = document.getElementById("spike-save-status");
+  spikeCheckbox.addEventListener("change", () => {
+    const enabled = spikeCheckbox.checked;
+    spikeSaveStatus.className = "save-status";
+    spikeSaveStatus.textContent = "";
+    spikeCheckbox.disabled = true;
+
+    fetch("/api/notifications", {
+      method: "POST",
+      headers: { ...authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ spikeAlertsEnabled: enabled }),
+    })
+      .then(async (r) => {
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+        spikeSaveStatus.textContent = "Saved";
+        spikeSaveStatus.className = "save-status ok";
+        setTimeout(() => { spikeSaveStatus.textContent = ""; spikeSaveStatus.className = "save-status"; }, 1500);
+      })
+      .catch((err) => {
+        spikeCheckbox.checked = !enabled;
+        spikeSaveStatus.textContent = err.message;
+        spikeSaveStatus.className = "save-status error";
+      })
+      .finally(() => { spikeCheckbox.disabled = false; });
+  });
+
+  const budgetAlertsCheckbox = document.getElementById("budget-alerts-enabled");
+  const budgetSaveStatus = document.getElementById("budget-save-status");
+  const thresholdRow = document.getElementById("threshold-row");
+  const thresholdInput = document.getElementById("threshold-input");
+
+  if (budgetAlertsCheckbox && thresholdInput) {
+    let lastGoodEnabled = budgetAlertsCheckbox.checked;
+    let lastGoodThreshold = thresholdInput.value;
+
+    const saveBudgetAlertSettings = () => {
+      budgetSaveStatus.className = "save-status";
+      budgetSaveStatus.textContent = "";
+      const enabled = budgetAlertsCheckbox.checked;
+      const threshold = Number(thresholdInput.value);
+      if (!Number.isFinite(threshold) || threshold <= 0) {
+        budgetSaveStatus.textContent = "Enter a positive number";
+        budgetSaveStatus.className = "save-status error";
+        return;
+      }
+      budgetAlertsCheckbox.disabled = true;
+      thresholdInput.disabled = true;
+
+      fetch("/api/notifications", {
+        method: "POST",
+        headers: { ...authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ budgetAlertsEnabled: enabled, alertThreshold: threshold }),
+      })
+        .then(async (r) => {
+          const data = await r.json();
+          if (data.error) throw new Error(data.error);
+          lastGoodEnabled = enabled;
+          lastGoodThreshold = String(threshold);
+          budgetSaveStatus.textContent = "Saved";
+          budgetSaveStatus.className = "save-status ok";
+          setTimeout(() => { budgetSaveStatus.textContent = ""; budgetSaveStatus.className = "save-status"; }, 1500);
+        })
+        .catch((err) => {
+          budgetAlertsCheckbox.checked = lastGoodEnabled;
+          thresholdInput.value = lastGoodThreshold;
+          thresholdRow.classList.toggle("is-dimmed", !lastGoodEnabled);
+          budgetSaveStatus.textContent = err.message;
+          budgetSaveStatus.className = "save-status error";
+        })
+        .finally(() => {
+          budgetAlertsCheckbox.disabled = false;
+          thresholdInput.disabled = !budgetAlertsCheckbox.checked;
+        });
+    };
+
+    budgetAlertsCheckbox.addEventListener("change", () => {
+      thresholdRow.classList.toggle("is-dimmed", !budgetAlertsCheckbox.checked);
+      saveBudgetAlertSettings();
+    });
+    thresholdInput.addEventListener("change", saveBudgetAlertSettings);
+  }
+
+  const alertTestBtn = document.getElementById("alert-test-btn");
+  const alertTestStatus = document.getElementById("alert-test-status");
+  alertTestBtn.addEventListener("click", () => {
+    alertTestStatus.textContent = "";
+    alertTestStatus.className = "test-status";
+    alertTestBtn.disabled = true;
+    alertTestBtn.textContent = "Sending…";
+
+    fetch("/api/alerts/test", { method: "POST", headers: authHeaders })
+      .then(async (r) => {
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+        alertTestStatus.textContent = `Sent to ${session.user.email}`;
+        alertTestStatus.className = "test-status ok";
+      })
+      .catch((err) => {
+        alertTestStatus.textContent = err.message;
+        alertTestStatus.className = "test-status error";
+      })
+      .finally(() => {
+        alertTestBtn.disabled = false;
+        alertTestBtn.textContent = "Send test alert";
       });
   });
 }
