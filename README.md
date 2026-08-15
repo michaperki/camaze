@@ -36,6 +36,15 @@ only a last-4 hint. `api/costs.js` uses a signed-in user's own keys when
 present, falling back to the server's env vars otherwise (which is what keeps
 local development working without connecting anything).
 
+The **Notifications** page (`public/notifications.html`) lets a user turn on
+a daily email digest — yesterday's spend, month-to-date, forecast, budget
+usage, and top models — sent via [Resend](https://resend.com)
+(`lib/digest.js`, `api/digest.js`). A Vercel Cron job hits
+`GET /api/cron/digest` every hour (`vercel.json`); it looks up whoever's
+`digest_hour` matches the current UTC hour in `user_notification_settings`
+and sends each of them the digest, authenticated by `CRON_SECRET` rather than
+a user session. Scheduling is hourly-resolution, UTC-only for now.
+
 ## Setup
 
 1. Copy the env file and fill in whichever providers you use — any subset is
@@ -134,13 +143,27 @@ you're reading this after the initial deploy).
      on public.user_settings for all
      using (auth.uid() = user_id)
      with check (auth.uid() = user_id);
+
+   create table public.user_notification_settings (
+     user_id uuid primary key references auth.users(id) on delete cascade,
+     digest_enabled boolean not null default false,
+     digest_hour integer not null default 9,
+     updated_at timestamptz not null default now()
+   );
+
+   alter table public.user_notification_settings enable row level security;
+
+   create policy "Users can manage their own settings"
+     on public.user_notification_settings for all
+     using (auth.uid() = user_id)
+     with check (auth.uid() = user_id);
    ```
 
-   `api/keys.js`, `api/budget.js`, and `api/costs.js` use the service role
-   key server-side, which bypasses RLS — every query is manually scoped to
-   the caller's `user_id` first. The policies above are still worth having
-   as a second line of defense against a future bug or a stray client-side
-   query.
+   `api/keys.js`, `api/budget.js`, `api/costs.js`, `api/notifications.js`,
+   and `api/digest.js` use the service role key server-side, which bypasses
+   RLS — every query is manually scoped to the caller's `user_id` first. The
+   policies above are still worth having as a second line of defense against
+   a future bug or a stray client-side query.
 
 4. **Add the remaining env vars** (see `.env.example` for details):
    - `SUPABASE_SERVICE_ROLE_KEY` — Project Settings → API → `service_role`.
@@ -149,6 +172,9 @@ you're reading this after the initial deploy).
      `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
      Use a different one per environment (local vs. deployed); losing it
      makes stored keys undecryptable, so back it up somewhere.
+   - `RESEND_API_KEY`, `CAMAZE_APP_URL`, `CRON_SECRET` — needed for the
+     daily email digest (Notifications page). See `.env.example` for details
+     on each.
 
 Once connected on the Integrations page, a user's own keys are used instead
 of the server's env vars for that user's dashboard requests.

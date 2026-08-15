@@ -165,6 +165,7 @@ async function fetchCosts(start, overrides = {}) {
   // values are strings; coerce at the boundary.
   const byDay = new Map();
   const byModel = new Map();
+  const dayModels = [];
   for (const row of result.rows || []) {
     const date = row.f[0].v;
     const model = row.f[1].v;
@@ -175,12 +176,15 @@ async function fetchCosts(start, overrides = {}) {
     byDay.set(date, (byDay.get(date) || 0) + amount);
     if (model) {
       byModel.set(model, (byModel.get(model) || 0) + amount);
+      // SQL already groups by day+model, so each row is a unique pair.
+      dayModels.push({ date, model, amount_usd: amount });
     }
   }
 
   return {
     days: [...byDay].map(([date, amount_usd]) => ({ date, provider: "google", amount_usd })),
     models: [...byModel].map(([model, amount_usd]) => ({ model, amount_usd })),
+    dayModels,
   };
 }
 

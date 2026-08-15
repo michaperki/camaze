@@ -10,6 +10,7 @@ async function fetchCosts(start, keyOverride) {
 
   const usdByDay = new Map();
   const usdByModel = new Map();
+  const usdByDayModel = new Map(); // day -> Map(model -> usd)
   let page = null;
   do {
     const params = new URLSearchParams({
@@ -45,12 +46,22 @@ async function fetchCosts(start, keyOverride) {
         const model = item.line_item?.split(",")[0]?.trim();
         if (model) {
           usdByModel.set(model, (usdByModel.get(model) || 0) + value);
+          if (!usdByDayModel.has(day)) usdByDayModel.set(day, new Map());
+          const dayMap = usdByDayModel.get(day);
+          dayMap.set(model, (dayMap.get(model) || 0) + value);
         }
       }
       usdByDay.set(day, usd);
     }
     page = body.has_more ? body.next_page : null;
   } while (page);
+
+  const dayModels = [];
+  for (const [date, dayMap] of usdByDayModel) {
+    for (const [model, usd] of dayMap) {
+      dayModels.push({ date, model, amount_usd: usd });
+    }
+  }
 
   return {
     days: [...usdByDay].map(([date, usd]) => ({
@@ -62,6 +73,7 @@ async function fetchCosts(start, keyOverride) {
       model,
       amount_usd: usd,
     })),
+    dayModels,
   };
 }
 

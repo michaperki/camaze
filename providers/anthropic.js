@@ -10,6 +10,7 @@ async function fetchCosts(start, keyOverride) {
 
   const centsByDay = new Map();
   const centsByModel = new Map();
+  const centsByDayModel = new Map(); // day -> Map(model -> cents)
   let page = null;
   do {
     const params = new URLSearchParams({
@@ -47,12 +48,22 @@ async function fetchCosts(start, keyOverride) {
         cents += value;
         if (item.model) {
           centsByModel.set(item.model, (centsByModel.get(item.model) || 0) + value);
+          if (!centsByDayModel.has(day)) centsByDayModel.set(day, new Map());
+          const dayMap = centsByDayModel.get(day);
+          dayMap.set(item.model, (dayMap.get(item.model) || 0) + value);
         }
       }
       centsByDay.set(day, cents);
     }
     page = body.has_more ? body.next_page : null;
   } while (page);
+
+  const dayModels = [];
+  for (const [date, dayMap] of centsByDayModel) {
+    for (const [model, cents] of dayMap) {
+      dayModels.push({ date, model, amount_usd: cents / 100 });
+    }
+  }
 
   return {
     days: [...centsByDay].map(([date, cents]) => ({
@@ -64,6 +75,7 @@ async function fetchCosts(start, keyOverride) {
       model,
       amount_usd: cents / 100,
     })),
+    dayModels,
   };
 }
 

@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>camaze — notifications</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:        #f9f9f7;
+    --surface-1:   #fcfcfb;
+    --text-primary:#0b0b0b;
+    --text-secondary:#52514e;
+    --text-muted:  #898781;
+    --border:      rgba(11,11,11,0.10);
+    --series-1:    #2a78d6;
+    --accent:      #2a78d6;
+    --danger:      #c0392b;
+    --ok-bg:       #e7f5ee;
+    --ok-fg:       #1a7a4c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page:        #0d0d0d;
+      --surface-1:   #1a1a19;
+      --text-primary:#ffffff;
+      --text-secondary:#c3c2b7;
+      --text-muted:  #898781;
+      --border:      rgba(255,255,255,0.10);
+      --series-1:    #3987e5;
+      --accent:      #3987e5;
+      --danger:      #e0655a;
+      --ok-bg:       #113325;
+      --ok-fg:       #4fd18f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 24px 20px 48px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 2px; }
+  .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
+  #chrome { display: none; }
+  #topbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 20px 20px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  #topbar button {
+    font: inherit;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+  }
+  #topbar button:hover { color: var(--text-primary); }
+  nav.tabs {
+    display: flex;
+    gap: 16px;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 12px 20px 0;
+    font-size: 13px;
+  }
+  nav.tabs a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    padding-bottom: 8px;
+    border-bottom: 2px solid transparent;
+  }
+  nav.tabs a:hover { color: var(--text-primary); }
+  nav.tabs a.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--series-1);
+    font-weight: 600;
+  }
+
+  .message { color: var(--text-secondary); font-size: 14px; padding: 24px 0; }
+
+  .section-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+  }
+  .section-title { font-size: 15px; font-weight: 600; }
+  .section-desc { font-size: 13px; color: var(--text-secondary); margin: 3px 0 14px; }
+
+  label.checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  label.checkbox-row input { cursor: pointer; }
+
+  .delivery-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .field-label { font-size: 12px; color: var(--text-muted); }
+
+  button, input, select {
+    font: inherit;
+    font-size: 13px;
+  }
+  select {
+    padding: 7px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-primary);
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .btn:hover { border-color: var(--text-muted); }
+  .btn:disabled { opacity: 0.6; cursor: default; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .form-actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+  .form-error { font-size: 13px; color: var(--danger); }
+
+  .test-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .test-status { font-size: 13px; }
+  .test-status.ok { color: var(--ok-fg); }
+  .test-status.error { color: var(--danger); }
+</style>
+</head>
+<body>
+<div id="chrome">
+  <div id="topbar">
+    <span id="user-email"></span>
+    <button id="signout-btn" type="button">Sign out</button>
+  </div>
+  <nav class="tabs">
+    <a href="/index.html">Dashboard</a>
+    <a href="/integrations.html">Integrations</a>
+    <a href="/notifications.html" class="active">Notifications</a>
+  </nav>
+</div>
+<main>
+  <h1>Notifications</h1>
+  <p class="subtitle">Choose how camaze keeps you posted</p>
+  <div id="content"><div class="message">Loading&hellip;</div></div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const esc = (s) => String(s).replace(/</g, "&lt;");
+
+function hourOptionsHtml(selected) {
+  let html = "";
+  for (let h = 0; h < 24; h++) {
+    const period = h < 12 ? "AM" : "PM";
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    const label = `${String(h12).padStart(2, "0")}:00 ${period}`;
+    html += `<option value="${h}"${h === selected ? " selected" : ""}>${label}</option>`;
+  }
+  return html;
+}
+
+function digestSectionHtml(settings) {
+  return `
+    <div class="section-card" id="digest-section">
+      <div class="section-title">Daily Digest</div>
+      <p class="section-desc">Receive a daily spend summary by email.</p>
+
+      <label class="checkbox-row">
+        <input type="checkbox" id="digest-enabled" ${settings.digestEnabled ? "checked" : ""}>
+        Enable daily digest
+      </label>
+
+      <div class="delivery-row">
+        <span class="field-label">Delivery time</span>
+        <select id="hour-select">${hourOptionsHtml(settings.digestHour)}</select>
+        <select id="tz-select">
+          <option value="UTC">UTC</option>
+        </select>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" id="save-btn" type="button">Save</button>
+        <span class="form-error" id="save-error"></span>
+      </div>
+
+      <div class="test-row">
+        <button class="btn" id="test-btn" type="button">Send test email now</button>
+        <span class="test-status" id="test-status"></span>
+      </div>
+    </div>`;
+}
+
+async function main() {
+  const cfgRes = await fetch("/api/config");
+  const cfg = await cfgRes.json();
+  if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
+    document.getElementById("content").innerHTML =
+      '<div class="message">Auth is not configured (missing SUPABASE_URL/SUPABASE_ANON_KEY).</div>';
+    return;
+  }
+
+  const client = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+  const { data: { session } } = await client.auth.getSession();
+  if (!session) {
+    window.location.replace("/login.html");
+    return;
+  }
+
+  document.getElementById("user-email").textContent = session.user.email ?? "";
+  document.getElementById("chrome").style.display = "block";
+  document.getElementById("signout-btn").addEventListener("click", async () => {
+    await client.auth.signOut();
+    window.location.replace("/login.html");
+  });
+
+  const authHeaders = { Authorization: `Bearer ${session.access_token}` };
+  const content = document.getElementById("content");
+
+  const res = await fetch("/api/notifications", { headers: authHeaders });
+  const settings = await res.json();
+  if (settings.error) throw new Error(settings.error);
+
+  content.innerHTML = digestSectionHtml(settings);
+
+  const saveBtn = document.getElementById("save-btn");
+  const saveError = document.getElementById("save-error");
+  saveBtn.addEventListener("click", () => {
+    saveError.textContent = "";
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+
+    const body = {
+      digestEnabled: document.getElementById("digest-enabled").checked,
+      digestHour: Number(document.getElementById("hour-select").value),
+    };
+
+    fetch("/api/notifications", {
+      method: "POST",
+      headers: { ...authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(async (r) => {
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+        saveBtn.textContent = "Saved";
+        setTimeout(() => { saveBtn.textContent = "Save"; }, 1500);
+      })
+      .catch((err) => {
+        saveError.textContent = err.message;
+        saveBtn.textContent = "Save";
+      })
+      .finally(() => { saveBtn.disabled = false; });
+  });
+
+  const testBtn = document.getElementById("test-btn");
+  const testStatus = document.getElementById("test-status");
+  testBtn.addEventListener("click", () => {
+    testStatus.textContent = "";
+    testStatus.className = "test-status";
+    testBtn.disabled = true;
+    testBtn.textContent = "Sending…";
+
+    fetch("/api/digest", { method: "POST", headers: authHeaders })
+      .then(async (r) => {
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+        testStatus.textContent = `Sent to ${session.user.email}`;
+        testStatus.className = "test-status ok";
+      })
+      .catch((err) => {
+        testStatus.textContent = err.message;
+        testStatus.className = "test-status error";
+      })
+      .finally(() => {
+        testBtn.disabled = false;
+        testBtn.textContent = "Send test email now";
+      });
+  });
+}
+
+main().catch((err) => {
+  document.getElementById("content").innerHTML =
+    '<div class="message">Could not load notification settings: ' + esc(err.message) + "</div>";
+});
+</script>
+</body>
+</html>
