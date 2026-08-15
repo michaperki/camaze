@@ -18,10 +18,26 @@ one line in `api/costs.js`. If one or two providers' credentials are missing
 or their API errors, the rest still render, with a note saying which ones
 failed.
 
+Flat recurring charges (currently only Google's "Gemini Code Assist monthly
+subscription" — identified by provider metadata, the BigQuery export's SKU
+description, not by looking for repeating dollar amounts) are split out
+from usage everywhere: the bars are usage only since a fixed cost can't
+spike, `api/costs.js` returns `totals.usage`/`totals.subscriptions` and a
+`subscriptions` breakdown alongside `totals.combined` (the full bill), and
+the dashboard shows all three ("$33.30 total — $18.60 usage, $14.70
+subscriptions") rather than hiding the recurring cost. Neither Anthropic's
+nor OpenAI's cost APIs expose anything like it, so their spend is always
+classified as usage. See `lib/costs.js`'s `isSubscriptionLine`.
+
 Above the chart, a month-to-date summary shows spend so far this month, a
-linear forecast for month-end, and (once a budget is set on the dashboard)
-how much of it's been used — the forecast is colored red/yellow/green
-against the budget.
+forecast for month-end, and (once a budget is set on the dashboard) how
+much of it's been used — the forecast is colored red/yellow/green against
+the budget. The forecast projects usage and subscriptions separately, then
+sums them (`buildSummary` in `lib/costs.js`): usage is extrapolated from
+the run-rate so far since it can spike, while a subscription's daily rate
+is close to constant, so linearly projecting it from partial-month data
+lands on its true monthly total rather than treating a fixed cost as if it
+could vary the way usage does.
 
 Deploys as static + serverless on [Vercel](https://vercel.com):
 `public/index.html` is a public landing page, `public/dashboard.html` is the
@@ -54,16 +70,34 @@ effect.
 The same cron run also checks for **spike and budget alerts** (`lib/alerts.js`,
 `lib/alertRunner.js`, `lib/alertEmail.js`) — a separate pass over a separate
 user list (`spike_alerts_enabled`/`budget_alerts_enabled`), independent of
-whether the digest itself is on. A spike alert fires when a day's spend is
-at least 3x the trailing 7-day median (computed live from the same 30-day
-window `api/costs.js` fetches — camaze keeps no separate spend-history
-table) and at least $1; a budget alert fires when the month-end forecast
-crosses a user-configurable percentage of their budget (default 80%). Each
-is sent as its own email, not folded into the digest, and each fires at
-most once (per day for spikes, per threshold per month for budgets) via an
-insert-with-conflict-ignore into `alert_state`. `GET /api/alerts/dryrun`
-replays spike detection against the last 30 real days without sending
-anything, for tuning the thresholds in `lib/alerts.js`.
+whether the digest itself is on. Both operate on usage only (see above) —
+a subscription can't spike and is never folded into either number.
+
+Spike detection is two-mode, computed from the trailing 7-day median of
+usage (excluding yesterday):
+
+- **ratio mode**, when that median is at least `MIN_BASELINE` ($0.50):
+  fires when yesterday's usage is at least `SPIKE_MULTIPLIER` (3x) the
+  median *and* at least `ABSOLUTE_FLOOR` ($1) — the absolute floor keeps a
+  20¢-vs-5¢ day from counting as a "spike."
+- **absolute mode**, when the median is below `MIN_BASELINE` (including
+  exactly zero, e.g. a quiet week): a ratio against a near-zero baseline is
+  meaningless, so it instead fires on any usage at or above
+  `WAKE_THRESHOLD` ($1) — spend resuming after a quiet stretch is exactly
+  the case worth flagging, not one to suppress for lack of a baseline.
+
+All four constants live at the top of `lib/alerts.js`. A budget alert
+fires when the month-end forecast (the full bill — budgets cover the whole
+invoice, not just usage) crosses a user-configurable percentage of their
+budget (default 80%). Each alert type is sent as its own email, not folded
+into the digest, and each fires at most once (per day for spikes, per
+threshold per month for budgets) via an insert-with-conflict-ignore into
+`alert_state`. `GET /api/alerts/dryrun` replays spike detection against the
+last 30 real days without sending anything, returning each day's
+usage/subscription split, baseline, ratio, mode, and whether it would have
+fired — and accepts `?multiplier=`/`?floor=`/`?minBaseline=`/`?wake=` to
+try different constants against real history without a redeploy (never
+persisted).
 
 ## Setup
 

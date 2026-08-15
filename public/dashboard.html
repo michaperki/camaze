@@ -155,6 +155,18 @@
   #tooltip .t-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
   #tooltip .t-value { font-weight: 600; font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 12px; }
   #models-card { margin-top: 16px; }
+  #subscriptions-card { margin-top: 16px; }
+  .subscription-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    font-size: 13px;
+    margin-top: 10px;
+  }
+  .subscription-row:first-of-type { margin-top: 12px; }
+  .subscription-name { color: var(--text-secondary); }
+  .subscription-amount { font-variant-numeric: tabular-nums; text-align: right; }
   .model-row {
     display: grid;
     grid-template-columns: minmax(0, 180px) 1fr auto;
@@ -278,6 +290,10 @@
     <div class="stat-label">Spend by model</div>
     <div id="models-content"></div>
   </div>
+  <div class="card" id="subscriptions-card" style="display:none">
+    <div class="stat-label">Recurring subscriptions</div>
+    <div id="subscriptions-content"></div>
+  </div>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -339,8 +355,15 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
     ? `<div class="stat-meta">as of ${esc(fmtAgo(cachedAt))} &middot; refreshes every 5 min</div>`
     : "";
 
+  // Bars are usage only (a flat subscription can't spike, so it never
+  // belongs in them) — the total line makes the full bill visible anyway,
+  // split out rather than folded silently into one number.
+  const totalLine = totals.subscriptions > 0
+    ? `<span class="chart-total-amount">${fmtUSD(totals.combined)}</span> total — ${fmtUSD(totals.usage)} usage, ${fmtUSD(totals.subscriptions)} subscriptions`
+    : `<span class="chart-total-amount">${fmtUSD(totals.combined)}</span> total`;
+
   const header =
-    '<div class="chart-total"><span class="chart-total-amount">' + fmtUSD(totals.combined) + "</span> total</div>" +
+    '<div class="chart-total">' + totalLine + "</div>" +
     meta +
     '<div class="legend">' +
     active.map(p =>
@@ -504,6 +527,22 @@ function renderModels(models) {
   }).join("");
 }
 
+function renderSubscriptions(subscriptions) {
+  const card = document.getElementById("subscriptions-card");
+  if (!subscriptions || subscriptions.length === 0) {
+    card.style.display = "none";
+    return;
+  }
+  card.style.display = "block";
+
+  document.getElementById("subscriptions-content").innerHTML = subscriptions.map(s =>
+    '<div class="subscription-row">' +
+    `<span class="subscription-name">${esc(s.name)}</span>` +
+    `<span class="subscription-amount">${fmtUSD(s.amount_usd)}</span>` +
+    "</div>"
+  ).join("");
+}
+
 const fmtMonthRange = (daysElapsed) => {
   const month = new Date().toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
   return `${month} 1–${daysElapsed}`;
@@ -607,17 +646,20 @@ function loadDashboard(accessToken, forceRefreshOverride) {
           '<div class="message">No providers connected yet. ' +
           '<a href="/integrations.html">Go to Integrations</a> to get started.</div>';
         renderModels([]);
+        renderSubscriptions([]);
         renderSummary(null);
         return;
       }
       render(data);
       renderModels(data.models);
+      renderSubscriptions(data.subscriptions);
       renderSummary(data.summary, accessToken);
     })
     .catch((err) => {
       document.getElementById("content").innerHTML =
         '<div class="message">Could not load cost data: ' + esc(err.message) + "</div>";
       renderModels([]);
+      renderSubscriptions([]);
       renderSummary(null);
     });
 }

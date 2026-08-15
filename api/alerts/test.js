@@ -5,7 +5,7 @@
 // fire, and never touches alert_state (so it can be clicked repeatedly).
 const { verifyUser, getUserById } = require("../../lib/supabase");
 const { resolveOverrides, fetchAllCosts } = require("../../lib/costs");
-const { evaluateSpike, dailyTotals, topDriver } = require("../../lib/alerts");
+const { evaluateSpike, dailyUsage, topDriver } = require("../../lib/alerts");
 const { renderSpikeAlert, sendAlertEmail } = require("../../lib/alertEmail");
 
 module.exports = async (req, res) => {
@@ -26,20 +26,19 @@ module.exports = async (req, res) => {
     }
 
     const costData = await fetchAllCosts(overrides, false);
-    const providerNames = costData.providers.map(p => p.name);
-    const totals = dailyTotals(costData.days, providerNames);
+    const usageSeries = dailyUsage(costData.days);
 
     const now = new Date();
     const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
     const dateStr = yesterday.toISOString().slice(0, 10);
 
-    const spike = evaluateSpike(totals, dateStr);
+    const spike = evaluateSpike(usageSeries, dateStr);
     const driver = topDriver(costData, dateStr);
     const fullUser = await getUserById(user.id);
     if (!fullUser?.email) throw new Error("Could not resolve the user's email address");
 
     const email = renderSpikeAlert({
-      dateStr, total: spike.total, baseline: spike.baseline, ratio: spike.ratio, driver,
+      dateStr, usage: spike.usage, baseline: spike.baseline, ratio: spike.ratio, mode: spike.mode, driver,
     });
     await sendAlertEmail(fullUser.email, email);
 
