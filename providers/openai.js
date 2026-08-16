@@ -106,10 +106,10 @@ async function validateKey(key) {
   throw new Error(body?.error?.message || `HTTP ${res.status} from OpenAI API`);
 }
 
-// In-memory project + API-key name cache, keyed by a hash of the admin key
-// (different orgs have disjoint ID spaces). No TTL — names "change rarely"
-// per the product requirement.
-const nameCache = new Map(); // hashedKey -> { projectNames, apiKeyNames }
+// In-memory project name cache, keyed by a hash of the admin key (different
+// orgs have disjoint ID spaces). No TTL — names "change rarely" per the
+// product requirement.
+const nameCache = new Map(); // hashedKey -> projectNames Map
 
 function cacheKeyFor(key) {
   return crypto.createHash("sha256").update(key).digest("hex");
@@ -134,59 +134,37 @@ async function listProjects(key) {
   return projects;
 }
 
-// owner_project_access=any: without it the endpoint applies membership-based
-// visibility rules that can exclude some enabled keys, per the docs.
-async function listProjectApiKeys(key, projectId) {
-  const names = new Map();
-  let after = null;
-  do {
-    const params = new URLSearchParams({ limit: "100", owner_project_access: "any" });
-    if (after) params.set("after", after);
-    const res = await fetch(`${ORG_BASE}/projects/${projectId}/api_keys?${params}`, {
-      headers: { Authorization: `Bearer ${key}` },
-    });
-    const body = await res.json().catch(() => null);
-    // A project we can't list keys for (archived, permissions, ...) just
-    // leaves its keys unresolved — not a hard failure for the whole request.
-    if (!res.ok) return names;
-    for (const k of body.data || []) names.set(k.id, k.name);
-    after = body.has_more ? body.last_id : null;
-  } while (after);
-  return names;
-}
-
-// Every API key that can appear as `api_key_id` on a Costs API result was
-// created under a project — /organization/admin_api_keys is a *different*,
-// org-level registry of keys used to call admin/management endpoints, and
-// doesn't contain these. So resolving names means walking the real
-// hierarchy: list projects, then each project's keys.
-async function resolveNames(key) {
+async function resolveProjectNames(key) {
   const cacheKey = cacheKeyFor(key);
   if (nameCache.has(cacheKey)) return nameCache.get(cacheKey);
 
   const projects = await listProjects(key);
   const projectNames = new Map(projects.map(p => [p.id, p.name]));
-  const apiKeyNames = new Map();
-  const perProjectKeyMaps = await Promise.all(projects.map(p => listProjectApiKeys(key, p.id)));
-  for (const m of perProjectKeyMaps) for (const [id, name] of m) apiKeyNames.set(id, name);
-
-  const resolved = { projectNames, apiKeyNames };
-  nameCache.set(cacheKey, resolved);
-  return resolved;
+  nameCache.set(cacheKey, projectNames);
+  return projectNames;
 }
 
 // [{ provider, scope, id, name, amount_usd, estimated }] — real dollars
-// straight from the Costs API, grouped by project_id AND api_key_id in one
-// request (a cross-product breakdown; summing either dimension is still
-// exact, since it's real dollars all the way down — no token estimation).
-// Separate call from fetchCosts above (grouped by line_item) so the existing
-// day/model chart query is untouched. `start`/`end`: Date objects.
+// straight from the Costs API grouped by project_id. Separate call from
+// fetchCosts above (grouped by line_item) so the existing day/model chart
+// query is untouched. `start`/`end`: Date objects.
+//
+// This used to also group by api_key_id and resolve key names via a
+// per-project GET .../api_keys fan-out (one request per project, all fired
+// concurrently). lib/costs.js's PROVIDER_SCOPE_PREFERENCE has always pinned
+// OpenAI's display to "project" scope only, so that entire fan-out was
+// computed and then discarded on every load — and for an org with enough
+// projects, it alone blew past OpenAI's per-minute admin API rate limit
+// ("You've exceeded the 30 request(s) every 1 minute(s) rate limit"),
+// knocking OpenAI out of the whole dashboard response. Removed rather than
+// throttled, since the result was never used. Reintroduce it (with actual
+// batching/caching this time) if PROVIDER_SCOPE_PREFERENCE.openai ever
+// prefers "api_key".
 async function fetchAttribution(start, end, keyOverride) {
   const key = keyOverride || process.env.OPENAI_ADMIN_KEY;
   if (!key) throw new Error("OPENAI_ADMIN_KEY is not set in .env");
 
   const byProject = new Map(); // id ("default" for null) -> usd
-  const byApiKey = new Map(); // id -> usd
   let page = null;
   do {
     const params = new URLSearchParams({
@@ -196,7 +174,6 @@ async function fetchAttribution(start, end, keyOverride) {
       limit: "31",
     });
     params.append("group_by", "project_id");
-    params.append("group_by", "api_key_id");
     if (page) params.set("page", page);
 
     const res = await fetch(`${API_URL}?${params}`, {
@@ -213,16 +190,14 @@ async function fetchAttribution(start, end, keyOverride) {
         if (!Number.isFinite(value)) continue;
         const projectId = item.project_id || "default";
         byProject.set(projectId, (byProject.get(projectId) || 0) + value);
-        // Workbench/no-key usage has no api_key_id — nothing to attribute it to.
-        if (item.api_key_id) byApiKey.set(item.api_key_id, (byApiKey.get(item.api_key_id) || 0) + value);
       }
     }
     page = body.has_more ? body.next_page : null;
   } while (page);
 
-  if (byProject.size === 0 && byApiKey.size === 0) return [];
+  if (byProject.size === 0) return [];
 
-  const { projectNames, apiKeyNames } = await resolveNames(key);
+  const projectNames = await resolveProjectNames(key);
   const rows = [];
   for (const [id, amount_usd] of byProject) {
     rows.push({
@@ -233,9 +208,6 @@ async function fetchAttribution(start, end, keyOverride) {
       amount_usd,
       estimated: false,
     });
-  }
-  for (const [id, amount_usd] of byApiKey) {
-    rows.push({ provider: "openai", scope: "api_key", id, name: apiKeyNames.get(id) || id, amount_usd, estimated: false });
   }
   return rows;
 }
