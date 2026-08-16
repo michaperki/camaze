@@ -1,6 +1,6 @@
 // Anthropic Admin API cost report -> normalized [{ date, provider, amount_usd }]
 const crypto = require("node:crypto");
-const { estimateCost } = require("../lib/pricing");
+const { resolvePrice, warnUnknownModel } = require("../lib/pricing");
 
 const ORG_BASE = "https://api.anthropic.com/v1/organizations";
 const API_URL = `${ORG_BASE}/cost_report`;
@@ -196,8 +196,12 @@ async function fetchWorkspaceCosts(start, end, key) {
 // workspace_id and model too (alongside api_key_id) costs nothing extra —
 // one request either way — but only api_key_id is used here; the real,
 // non-estimated workspace total comes from fetchWorkspaceCosts above.
+//
+// A model with no price-map entry never drops its usage — it's folded into
+// the key's `unpriced` bucket (raw token counts, no dollar figure) instead
+// of being silently priced at $0 and vanishing. See lib/pricing.js.
 async function fetchApiKeyUsageEstimate(start, end, key) {
-  const byApiKey = new Map(); // id -> usd
+  const byApiKey = new Map(); // id -> { amountUsd, unpriced, unpricedModels: Set, unpricedInputTokens, unpricedOutputTokens }
   let page = null;
   do {
     const params = new URLSearchParams({
@@ -228,9 +232,27 @@ async function fetchApiKeyUsageEstimate(start, end, key) {
           (item.cache_creation?.ephemeral_1h_input_tokens || 0) +
           (item.cache_creation?.ephemeral_5m_input_tokens || 0);
         const outputTokens = item.output_tokens || 0;
-        const usd = estimateCost("anthropic", item.model, inputTokens, outputTokens);
-        if (usd === 0) continue;
-        byApiKey.set(item.api_key_id, (byApiKey.get(item.api_key_id) || 0) + usd);
+
+        const entry = byApiKey.get(item.api_key_id) || {
+          amountUsd: 0,
+          unpriced: false,
+          unpricedModels: new Set(),
+          unpricedInputTokens: 0,
+          unpricedOutputTokens: 0,
+        };
+
+        const prices = resolvePrice("anthropic", item.model);
+        if (prices) {
+          const [inPrice, outPrice] = prices;
+          entry.amountUsd += (inputTokens / 1_000_000) * inPrice + (outputTokens / 1_000_000) * outPrice;
+        } else {
+          warnUnknownModel("anthropic", item.model);
+          entry.unpriced = true;
+          if (item.model) entry.unpricedModels.add(item.model);
+          entry.unpricedInputTokens += inputTokens;
+          entry.unpricedOutputTokens += outputTokens;
+        }
+        byApiKey.set(item.api_key_id, entry);
       }
     }
     page = body.has_more ? body.next_page : null;
@@ -239,9 +261,10 @@ async function fetchApiKeyUsageEstimate(start, end, key) {
   return byApiKey;
 }
 
-// [{ provider, scope, id, name, amount_usd, estimated }] — workspace rows are
-// real dollars (cost_report), api_key rows are token-derived estimates
-// (usage_report/messages has no dollar figure). `start`/`end`: Date objects.
+// [{ provider, scope, id, name, amount_usd, estimated, unpriced, unpricedModels, unpricedTokens }]
+// — workspace rows are real dollars (cost_report), api_key rows are
+// token-derived estimates (usage_report/messages has no dollar figure).
+// `start`/`end`: Date objects.
 async function fetchAttribution(start, end, keyOverride) {
   const key = keyOverride || process.env.ANTHROPIC_ADMIN_KEY;
   if (!key) throw new Error("ANTHROPIC_ADMIN_KEY is not set in .env");
@@ -254,8 +277,18 @@ async function fetchAttribution(start, end, keyOverride) {
   const rows = [];
   if (byApiKey.size > 0) {
     const apiKeyNames = await resolveApiKeyNames(key);
-    for (const [id, amount_usd] of byApiKey) {
-      rows.push({ provider: "anthropic", scope: "api_key", id, name: apiKeyNames.get(id) || id, amount_usd, estimated: true });
+    for (const [id, entry] of byApiKey) {
+      rows.push({
+        provider: "anthropic",
+        scope: "api_key",
+        id,
+        name: apiKeyNames.get(id) || id,
+        amount_usd: entry.amountUsd,
+        estimated: true,
+        unpriced: entry.unpriced,
+        unpricedModels: [...entry.unpricedModels],
+        unpricedTokens: { input: entry.unpricedInputTokens, output: entry.unpricedOutputTokens },
+      });
     }
   }
   if (byWorkspace.size > 0) {

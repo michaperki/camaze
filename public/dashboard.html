@@ -227,11 +227,20 @@
     padding: 0 3px;
     margin-left: 2px;
   }
+  .unpriced-marker {
+    font-size: 10px;
+    color: var(--warning);
+    border: 1px solid var(--warning);
+    border-radius: 3px;
+    padding: 0 3px;
+    margin-left: 2px;
+  }
   .section-footnote {
     font-size: 12px;
     color: var(--text-muted);
     margin: 14px 0 0;
   }
+  .section-footnote-warning { color: var(--warning); }
   .attribution-group { margin-top: 16px; }
   .attribution-group:first-child { margin-top: 0; }
   .attribution-group-label {
@@ -346,6 +355,7 @@
       Figures marked "est." are derived from token counts, not billed dollars — Anthropic doesn't report
       per-API-key cost directly.
     </p>
+    <p class="section-footnote section-footnote-warning" id="attribution-unpriced-note" style="display:none"></p>
   </div>
   <div class="card" id="subscriptions-card" style="display:none">
     <div class="stat-label">Subscriptions &amp; other charges</div>
@@ -618,12 +628,29 @@ const PROVIDER_ORDER = ["anthropic", "openai", "google"];
 function renderAttribution(attribution) {
   const card = document.getElementById("attribution-card");
   const footnote = document.getElementById("attribution-footnote");
+  const unpricedNote = document.getElementById("attribution-unpriced-note");
   if (!attribution || attribution.length === 0) {
     card.style.display = "none";
     return;
   }
   card.style.display = "block";
   footnote.style.display = attribution.some(a => a.estimated) ? "block" : "none";
+
+  // Under-reporting must never be invisible: if any row hit a model with no
+  // price-map entry, name every one of them here rather than letting the
+  // amount look complete when it's actually a partial total.
+  const unpricedModels = new Set();
+  for (const row of attribution) {
+    for (const m of row.unpricedModels || []) unpricedModels.add(m);
+  }
+  if (unpricedModels.size > 0) {
+    unpricedNote.textContent =
+      `Spend on ${[...unpricedModels].sort().join(", ")} isn't priced yet, so totals for the affected ` +
+      `keys/projects are undercounted — token counts were recorded but not converted to dollars.`;
+    unpricedNote.style.display = "block";
+  } else {
+    unpricedNote.style.display = "none";
+  }
 
   const groups = new Map(); // provider -> rows
   for (const row of attribution) {
@@ -643,6 +670,9 @@ function renderAttribution(attribution) {
     const bars = rows.map(a => {
       const pct = maxAmount > 0 ? Math.max((a.amount_usd / maxAmount) * 100, 1) : 0;
       const estBadge = a.estimated ? '<span class="est-marker">est.</span>' : "";
+      const unpricedBadge = a.unpriced
+        ? `<span class="unpriced-marker" title="${esc((a.unpricedModels || []).join(', '))}">unpriced</span>`
+        : "";
       return (
         '<div class="model-row">' +
         `<span class="model-label" title="${esc(a.name)}">${esc(a.name)}</span>` +
@@ -650,7 +680,7 @@ function renderAttribution(attribution) {
         `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` +
         "</div>" +
         '<span class="model-stats">' +
-        `<span class="model-amount">${fmtUSD(a.amount_usd)}${estBadge}</span>` +
+        `<span class="model-amount">${fmtUSD(a.amount_usd)}${estBadge}${unpricedBadge}</span>` +
         "</span>" +
         "</div>"
       );
