@@ -1,6 +1,6 @@
 // Anthropic Admin API cost report -> normalized [{ date, provider, amount_usd }]
 const crypto = require("node:crypto");
-const { resolvePrice, warnUnknownModel } = require("../lib/pricing");
+const { resolvePrice, warnUnknownModel, ensurePricesLoaded } = require("../lib/pricing");
 
 const ORG_BASE = "https://api.anthropic.com/v1/organizations";
 const API_URL = `${ORG_BASE}/cost_report`;
@@ -200,7 +200,15 @@ async function fetchWorkspaceCosts(start, end, key) {
 // A model with no price-map entry never drops its usage — it's folded into
 // the key's `unpriced` bucket (raw token counts, no dollar figure) instead
 // of being silently priced at $0 and vanishing. See lib/pricing.js.
+//
+// Awaits the LiteLLM price load once, up front — unlike the gateway's
+// request-time estimateCost, this call is already making several sequential
+// admin-API round trips, so paying for one more (Supabase, or occasionally
+// a GitHub fetch) here is cheap, and it means the very first dashboard load
+// on a cold container gets current prices instead of overrides-only.
 async function fetchApiKeyUsageEstimate(start, end, key) {
+  await ensurePricesLoaded();
+
   const byApiKey = new Map(); // id -> { amountUsd, unpriced, unpricedModels: Set, unpricedInputTokens, unpricedOutputTokens }
   let page = null;
   do {
