@@ -1,5 +1,8 @@
 // OpenAI organization Costs API -> normalized [{ date, provider, amount_usd }]
-const API_URL = "https://api.openai.com/v1/organization/costs";
+const crypto = require("node:crypto");
+
+const ORG_BASE = "https://api.openai.com/v1/organization";
+const API_URL = `${ORG_BASE}/costs`;
 
 // `start`: Date (UTC midnight). `keyOverride`: use this key instead of the
 // env var (per-user keys). Throws on missing key or API error. Returns
@@ -97,4 +100,89 @@ async function validateKey(key) {
   throw new Error(body?.error?.message || `HTTP ${res.status} from OpenAI API`);
 }
 
-module.exports = { name: "openai", label: "OpenAI", fetchCosts, validateKey };
+// In-memory project name cache, keyed by a hash of the admin key (different
+// orgs have disjoint project ID spaces). No TTL — project names "change
+// rarely" per the product requirement.
+const projectNameCache = new Map(); // hashedKey -> Map(id -> name)
+
+function cacheKeyFor(key) {
+  return crypto.createHash("sha256").update(key).digest("hex");
+}
+
+async function listProjectNames(key) {
+  const cacheKey = cacheKeyFor(key);
+  if (projectNameCache.has(cacheKey)) return projectNameCache.get(cacheKey);
+
+  const names = new Map();
+  let after = null;
+  do {
+    const params = new URLSearchParams({ limit: "100" });
+    if (after) params.set("after", after);
+    const res = await fetch(`${ORG_BASE}/projects?${params}`, {
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(body?.error?.message || `HTTP ${res.status} from OpenAI API (projects)`);
+    }
+    for (const p of body.data || []) names.set(p.id, p.name);
+    after = body.has_more ? body.last_id : null;
+  } while (after);
+
+  projectNameCache.set(cacheKey, names);
+  return names;
+}
+
+// [{ provider, scope, id, name, amount_usd, estimated }] — real dollars
+// straight from the Costs API grouped by project_id, no estimation needed.
+// Separate call from fetchCosts above (grouped by line_item) so the existing
+// day/model chart query is untouched. `start`/`end`: Date objects.
+async function fetchAttribution(start, end, keyOverride) {
+  const key = keyOverride || process.env.OPENAI_ADMIN_KEY;
+  if (!key) throw new Error("OPENAI_ADMIN_KEY is not set in .env");
+
+  const byProject = new Map(); // id ("default" for null) -> usd
+  let page = null;
+  do {
+    const params = new URLSearchParams({
+      start_time: String(Math.floor(start.getTime() / 1000)),
+      end_time: String(Math.floor(end.getTime() / 1000)),
+      bucket_width: "1d",
+      limit: "31",
+    });
+    params.append("group_by[]", "project_id");
+    if (page) params.set("page", page);
+
+    const res = await fetch(`${API_URL}?${params}`, {
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(body?.error?.message || `HTTP ${res.status} from OpenAI API`);
+    }
+
+    for (const bucket of body.data || []) {
+      for (const item of bucket.results || []) {
+        const value = Number(item.amount?.value ?? 0);
+        if (!Number.isFinite(value)) continue;
+        const id = item.project_id || "default";
+        byProject.set(id, (byProject.get(id) || 0) + value);
+      }
+    }
+    page = body.has_more ? body.next_page : null;
+  } while (page);
+
+  if (byProject.size === 0) return [];
+
+  const projectNames = await listProjectNames(key);
+  return [...byProject].map(([id, amount_usd]) => ({
+    provider: "openai",
+    scope: "project",
+    id,
+    name: id === "default" ? "Default project" : (projectNames.get(id) || id),
+    amount_usd,
+    estimated: false,
+  }));
+}
+
+module.exports = { name: "openai", label: "OpenAI", fetchCosts, validateKey, fetchAttribution };

@@ -6,26 +6,12 @@
 // logging happens after the client has already gotten every byte.
 const crypto = require("node:crypto");
 const cryptoLib = require("../lib/crypto");
+const { estimateCost } = require("../lib/pricing");
 const { lookupGatewayKey, getProviderKey, logGatewayRequest } = require("../lib/supabase");
 
 const UPSTREAM_HOST = {
   anthropic: "https://api.anthropic.com",
   openai: "https://api.openai.com",
-};
-
-// USD per million tokens, [input, output]. Unlisted models cost 0 — spend
-// still shows up by token count, just not priced, rather than guessing.
-const PRICE_PER_MILLION = {
-  anthropic: {
-    "claude-sonnet-4-6": [3.00, 15.00],
-    "claude-opus-4-5": [15.00, 75.00],
-    "claude-haiku-4-5": [0.80, 4.00],
-  },
-  openai: {
-    "gpt-4o": [2.50, 10.00],
-    "gpt-4o-mini": [0.15, 0.60],
-    "o3": [10.00, 40.00],
-  },
 };
 
 // Response headers that describe the upstream TCP/HTTP framing, not the
@@ -55,13 +41,6 @@ function parseRoute(req) {
   const upstreamPath = rest.slice(slash + 1);
   if (!UPSTREAM_HOST[provider] || !upstreamPath) return null;
   return { provider, upstreamPath };
-}
-
-function estimateCost(provider, model, inputTokens, outputTokens) {
-  const prices = PRICE_PER_MILLION[provider]?.[model];
-  if (!prices) return 0;
-  const [inPrice, outPrice] = prices;
-  return (inputTokens / 1_000_000) * inPrice + (outputTokens / 1_000_000) * outPrice;
 }
 
 // Reads usage out of whatever the upstream sent — an SSE event stream (parse

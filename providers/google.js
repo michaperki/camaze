@@ -139,18 +139,23 @@ async function fetchCosts(start, overrides = {}) {
   // conversion rate (1 for USD-billed accounts). All services for now.
   // Grouped by SKU too (the closest thing to a "model" in billing export —
   // e.g. specific Vertex AI/Gemini line items) so spend can be broken down
-  // per model alongside the daily totals, from the one query.
+  // per model alongside the daily totals, from the one query. Also grouped
+  // by project (id + display name) so the same query yields a per-project
+  // breakdown — this fans rows out further, but day/model totals below are
+  // summed across whatever rows come back, so they're unaffected.
   const sql = `
     SELECT
       DATE(usage_start_time, 'UTC') AS day,
       sku.description AS model,
+      project.id AS project_id,
+      project.name AS project_name,
       SUM(
         (cost + IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0))
         / IFNULL(currency_conversion_rate, 1)
       ) AS amount_usd
     FROM \`${project}.${dataset}.${table}\`
     WHERE usage_start_time >= TIMESTAMP('${start.toISOString()}')
-    GROUP BY day, model
+    GROUP BY day, model, project_id, project_name
     ORDER BY day`;
 
   const result = await bq(`/projects/${project}/queries`, accessToken, {
@@ -161,30 +166,42 @@ async function fetchCosts(start, overrides = {}) {
     throw new Error("BigQuery query did not complete within 30s — try again");
   }
 
-  // Rows arrive as { f: [{ v: "2026-08-01" }, { v: "Gemini ..." }, { v: "12.34" }] } —
-  // values are strings; coerce at the boundary.
+  // Rows arrive as { f: [{ v: "2026-08-01" }, { v: "Gemini ..." }, { v: "my-project" },
+  // { v: "My Project" }, { v: "12.34" }] } — values are strings; coerce at the boundary.
   const byDay = new Map();
   const byModel = new Map();
-  const dayModels = [];
+  const byProject = new Map(); // project_id -> { name, amount_usd }
+  const byDayModel = new Map(); // "date|model" -> amount_usd, since project fans day+model out
   for (const row of result.rows || []) {
     const date = row.f[0].v;
     const model = row.f[1].v;
-    const amount = Number(row.f[2].v ?? 0);
+    const projectId = row.f[2].v;
+    const projectName = row.f[3].v;
+    const amount = Number(row.f[4].v ?? 0);
     if (!Number.isFinite(amount)) {
-      throw new Error(`Google returned a non-numeric amount for ${date}: ${JSON.stringify(row.f[2].v)}`);
+      throw new Error(`Google returned a non-numeric amount for ${date}: ${JSON.stringify(row.f[4].v)}`);
     }
     byDay.set(date, (byDay.get(date) || 0) + amount);
     if (model) {
       byModel.set(model, (byModel.get(model) || 0) + amount);
-      // SQL already groups by day+model, so each row is a unique pair.
-      dayModels.push({ date, model, amount_usd: amount });
+      const dayModelKey = `${date}|${model}`;
+      byDayModel.set(dayModelKey, (byDayModel.get(dayModelKey) || 0) + amount);
+    }
+    if (projectId) {
+      const entry = byProject.get(projectId) || { name: projectName || projectId, amount_usd: 0 };
+      entry.amount_usd += amount;
+      byProject.set(projectId, entry);
     }
   }
 
   return {
     days: [...byDay].map(([date, amount_usd]) => ({ date, provider: "google", amount_usd })),
     models: [...byModel].map(([model, amount_usd]) => ({ model, amount_usd })),
-    dayModels,
+    dayModels: [...byDayModel].map(([key, amount_usd]) => {
+      const sep = key.indexOf("|");
+      return { date: key.slice(0, sep), model: key.slice(sep + 1), amount_usd };
+    }),
+    projects: [...byProject].map(([id, { name, amount_usd }]) => ({ id, name, amount_usd })),
   };
 }
 

@@ -1,7 +1,7 @@
 // camaze — minimal AI spend tracker.
 // Vercel serverless function: proxies each provider's cost API so keys stay server-side.
 const { verifyUser } = require("../lib/supabase");
-const { resolveOverrides, fetchAllCosts, buildSummary, resolveBudget } = require("../lib/costs");
+const { resolveOverrides, fetchAllCosts, buildSummary, resolveBudget, fetchAttribution } = require("../lib/costs");
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 // Keyed per user (or "env" for anonymous/env-var requests) — a shared cache
@@ -42,6 +42,7 @@ module.exports = async (req, res) => {
         models: [],
         subscriptions: [],
         summary: null,
+        attribution: [],
         cached: false,
         cachedAt: new Date(now).toISOString(),
       });
@@ -53,8 +54,14 @@ module.exports = async (req, res) => {
       resolveBudget(user?.id),
     ]);
     // dayModels is only needed for the email digest — not sent to the browser.
-    const { dayModels, ...costData } = rawCostData;
-    const data = { ...costData, summary: buildSummary(costData.days, budget) };
+    // projects (Google-only, from the same query) feeds into attribution
+    // below instead of going out under its own key.
+    const { dayModels, projects, ...costData } = rawCostData;
+    const attribution = await fetchAttribution(overrides, localDevFallback, projects).catch((e) => {
+      console.warn(`Could not load attribution: ${e.message}`);
+      return [];
+    });
+    const data = { ...costData, summary: buildSummary(costData.days, budget), attribution };
     cache.set(cacheKey, { data, fetchedAt: now });
     res.status(200).json({ ...data, cached: false, cachedAt: new Date(now).toISOString() });
   } catch (err) {

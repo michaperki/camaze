@@ -198,6 +198,20 @@
     color: var(--text-secondary);
     text-align: right;
   }
+  #attribution-card { margin-top: 16px; }
+  .est-marker {
+    font-size: 10px;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0 3px;
+    margin-left: 2px;
+  }
+  .section-footnote {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 14px 0 0;
+  }
   #summary-row {
     display: none;
     grid-template-columns: repeat(3, 1fr);
@@ -290,6 +304,14 @@
   <div class="card" id="models-card" style="display:none">
     <div class="stat-label">Spend by model (last 30 days)</div>
     <div id="models-content"></div>
+  </div>
+  <div class="card" id="attribution-card" style="display:none">
+    <div class="stat-label">Spend by project, last 30 days</div>
+    <div id="attribution-content"></div>
+    <p class="section-footnote" id="attribution-footnote" style="display:none">
+      Figures marked "est." are derived from token counts, not billed dollars — Anthropic doesn't report
+      per-API-key cost directly.
+    </p>
   </div>
   <div class="card" id="subscriptions-card" style="display:none">
     <div class="stat-label">Recurring subscriptions</div>
@@ -528,6 +550,41 @@ function renderModels(models) {
   }).join("");
 }
 
+// scope/id disambiguates same-name rows across providers or scopes (e.g. an
+// Anthropic API key and an OpenAI project both called "prod") — a label
+// alone could collide, so the source data always carries its own key too.
+function renderAttribution(attribution) {
+  const card = document.getElementById("attribution-card");
+  const footnote = document.getElementById("attribution-footnote");
+  if (!attribution || attribution.length === 0) {
+    card.style.display = "none";
+    return;
+  }
+  card.style.display = "block";
+
+  const sorted = [...attribution].sort((a, b) => b.amount_usd - a.amount_usd);
+  const maxAmount = Math.max(...sorted.map(a => a.amount_usd));
+  const anyEstimated = sorted.some(a => a.estimated);
+  footnote.style.display = anyEstimated ? "block" : "none";
+
+  document.getElementById("attribution-content").innerHTML = sorted.map(a => {
+    const pct = maxAmount > 0 ? Math.max((a.amount_usd / maxAmount) * 100, 1) : 0;
+    const fill = SERIES_VARS[a.provider] || "var(--text-muted)";
+    const estBadge = a.estimated ? '<span class="est-marker">est.</span>' : "";
+    return (
+      '<div class="model-row">' +
+      `<span class="model-label" title="${esc(a.name)}">${esc(a.name)}</span>` +
+      '<div class="model-bar-track">' +
+      `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` +
+      "</div>" +
+      '<span class="model-stats">' +
+      `<span class="model-amount">${fmtUSD(a.amount_usd)}${estBadge}</span>` +
+      "</span>" +
+      "</div>"
+    );
+  }).join("");
+}
+
 function renderSubscriptions(subscriptions) {
   const card = document.getElementById("subscriptions-card");
   if (!subscriptions || subscriptions.length === 0) {
@@ -647,12 +704,14 @@ function loadDashboard(accessToken, forceRefreshOverride) {
           '<div class="message">No providers connected yet. ' +
           '<a href="/integrations.html">Go to Integrations</a> to get started.</div>';
         renderModels([]);
+        renderAttribution([]);
         renderSubscriptions([]);
         renderSummary(null);
         return;
       }
       render(data);
       renderModels(data.models);
+      renderAttribution(data.attribution);
       renderSubscriptions(data.subscriptions);
       renderSummary(data.summary, accessToken);
     })
@@ -660,6 +719,7 @@ function loadDashboard(accessToken, forceRefreshOverride) {
       document.getElementById("content").innerHTML =
         '<div class="message">Could not load cost data: ' + esc(err.message) + "</div>";
       renderModels([]);
+      renderAttribution([]);
       renderSubscriptions([]);
       renderSummary(null);
     });
