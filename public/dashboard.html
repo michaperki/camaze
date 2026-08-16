@@ -50,6 +50,26 @@
   }
   main { max-width: 960px; margin: 0 auto; padding: 32px 20px 48px; }
   .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
+  #month-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 6px;
+  }
+  #month-selector button {
+    font: inherit;
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 9px;
+    cursor: pointer;
+    line-height: 1.4;
+  }
+  #month-selector button:hover:not(:disabled) { color: var(--text-primary); border-color: var(--text-muted); }
+  #month-selector button:disabled { opacity: 0.4; cursor: default; }
+  #month-label { font-size: 14px; font-weight: 600; min-width: 9em; text-align: center; }
   .card {
     background: var(--surface-1);
     border: 1px solid var(--border);
@@ -212,6 +232,15 @@
     color: var(--text-muted);
     margin: 14px 0 0;
   }
+  .attribution-group { margin-top: 16px; }
+  .attribution-group:first-child { margin-top: 0; }
+  .attribution-group-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+  .attribution-scope { font-weight: 400; color: var(--text-muted); }
   #summary-row {
     display: none;
     grid-template-columns: repeat(3, 1fr);
@@ -281,17 +310,22 @@
   </div>
 </header>
 <main>
-  <p class="subtitle">AI API spend, daily, last 30 days (UTC)</p>
+  <div id="month-selector">
+    <button id="month-prev" type="button" aria-label="Previous month">&larr;</button>
+    <span id="month-label"></span>
+    <button id="month-next" type="button" aria-label="Next month">&rarr;</button>
+  </div>
+  <p class="subtitle" id="subtitle">AI API spend, daily (UTC)</p>
   <div id="summary-row">
     <div class="stat-card">
-      <div class="stat-card-label">Month to Date</div>
+      <div class="stat-card-label" id="mtd-label">Month to Date</div>
       <div class="stat-card-value" id="mtd-value">—</div>
       <div class="stat-card-meta" id="mtd-range"></div>
     </div>
     <div class="stat-card">
       <div class="stat-card-label">Forecast</div>
       <div class="stat-card-value" id="forecast-value">—</div>
-      <div class="stat-card-meta">est. month-end</div>
+      <div class="stat-card-meta" id="forecast-meta">est. month-end</div>
     </div>
     <div class="stat-card">
       <div class="stat-card-label">Budget</div>
@@ -302,11 +336,11 @@
     <div id="content"><div class="message">Loading cost data&hellip;</div></div>
   </div>
   <div class="card" id="models-card" style="display:none">
-    <div class="stat-label">Spend by model (last 30 days)</div>
+    <div class="stat-label" id="models-label">Spend by model</div>
     <div id="models-content"></div>
   </div>
   <div class="card" id="attribution-card" style="display:none">
-    <div class="stat-label">Spend by project, last 30 days</div>
+    <div class="stat-label" id="attribution-label">Spend by project</div>
     <div id="attribution-content"></div>
     <p class="section-footnote" id="attribution-footnote" style="display:none">
       Figures marked "est." are derived from token counts, not billed dollars — Anthropic doesn't report
@@ -314,7 +348,7 @@
     </p>
   </div>
   <div class="card" id="subscriptions-card" style="display:none">
-    <div class="stat-label">Recurring subscriptions</div>
+    <div class="stat-label">Subscriptions &amp; other charges</div>
     <div id="subscriptions-content"></div>
   </div>
 </main>
@@ -326,6 +360,28 @@ const SERIES_VARS = {
   openai: "var(--series-2)",
   google: "var(--series-3)",
 };
+
+// Client-side month selection — { year, month: 1-12 }, all UTC to match
+// how every date in this dashboard is already bucketed. Passed to
+// /api/costs as ?month=YYYY-MM; the backend scopes every provider call and
+// the summary computation to exactly that calendar month.
+function currentMonthUTC() {
+  const now = new Date();
+  return { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 };
+}
+let selectedMonth = currentMonthUTC();
+
+const monthStr = (sel) => `${sel.year}-${String(sel.month).padStart(2, "0")}`;
+const monthLabel = (sel) =>
+  new Date(Date.UTC(sel.year, sel.month - 1, 1)).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+const isSelectedMonthCurrent = (sel) => {
+  const c = currentMonthUTC();
+  return sel.year === c.year && sel.month === c.month;
+};
+function shiftMonth(sel, delta) {
+  const d = new Date(Date.UTC(sel.year, sel.month - 1 + delta, 1));
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
+}
 
 const fmtUSD = (v, opts = {}) =>
   v.toLocaleString("en-US", { style: "currency", currency: "USD", ...opts });
@@ -468,7 +524,7 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
 
   content.innerHTML = header +
     '<div id="chart-wrap">' +
-    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Stacked bar chart of daily AI API spend by provider over the last 30 days">${s}</svg>` +
+    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Stacked bar chart of daily AI API spend by provider for ${esc(monthLabel(selectedMonth))}">${s}</svg>` +
     '<div id="tooltip"></div></div>';
 
   const wrap = document.getElementById("chart-wrap");
@@ -550,9 +606,15 @@ function renderModels(models) {
   }).join("");
 }
 
-// scope/id disambiguates same-name rows across providers or scopes (e.g. an
-// Anthropic API key and an OpenAI project both called "prod") — a label
-// alone could collide, so the source data always carries its own key too.
+// The backend already picks one scope per provider (api_key vs workspace
+// vs project — see lib/costs.js's PROVIDER_SCOPE_PREFERENCE), so rows never
+// mix hierarchy levels within a provider. This groups by provider and shows
+// each as its own labeled section — bars are only ever compared within a
+// provider's own group, never across providers with different scopes.
+const PROVIDER_LABELS = { anthropic: "Anthropic", openai: "OpenAI", google: "Google" };
+const SCOPE_LABELS = { api_key: "by API key", workspace: "by workspace", project: "by project" };
+const PROVIDER_ORDER = ["anthropic", "openai", "google"];
+
 function renderAttribution(attribution) {
   const card = document.getElementById("attribution-card");
   const footnote = document.getElementById("attribution-footnote");
@@ -561,25 +623,45 @@ function renderAttribution(attribution) {
     return;
   }
   card.style.display = "block";
+  footnote.style.display = attribution.some(a => a.estimated) ? "block" : "none";
 
-  const sorted = [...attribution].sort((a, b) => b.amount_usd - a.amount_usd);
-  const maxAmount = Math.max(...sorted.map(a => a.amount_usd));
-  const anyEstimated = sorted.some(a => a.estimated);
-  footnote.style.display = anyEstimated ? "block" : "none";
+  const groups = new Map(); // provider -> rows
+  for (const row of attribution) {
+    if (!groups.has(row.provider)) groups.set(row.provider, []);
+    groups.get(row.provider).push(row);
+  }
 
-  document.getElementById("attribution-content").innerHTML = sorted.map(a => {
-    const pct = maxAmount > 0 ? Math.max((a.amount_usd / maxAmount) * 100, 1) : 0;
-    const fill = SERIES_VARS[a.provider] || "var(--text-muted)";
-    const estBadge = a.estimated ? '<span class="est-marker">est.</span>' : "";
+  const order = PROVIDER_ORDER.filter(p => groups.has(p))
+    .concat([...groups.keys()].filter(p => !PROVIDER_ORDER.includes(p)));
+
+  document.getElementById("attribution-content").innerHTML = order.map(providerName => {
+    const rows = groups.get(providerName).slice().sort((a, b) => b.amount_usd - a.amount_usd);
+    const maxAmount = Math.max(...rows.map(r => r.amount_usd));
+    const fill = SERIES_VARS[providerName] || "var(--text-muted)";
+    const scopeLabel = SCOPE_LABELS[rows[0].scope] || "";
+
+    const bars = rows.map(a => {
+      const pct = maxAmount > 0 ? Math.max((a.amount_usd / maxAmount) * 100, 1) : 0;
+      const estBadge = a.estimated ? '<span class="est-marker">est.</span>' : "";
+      return (
+        '<div class="model-row">' +
+        `<span class="model-label" title="${esc(a.name)}">${esc(a.name)}</span>` +
+        '<div class="model-bar-track">' +
+        `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` +
+        "</div>" +
+        '<span class="model-stats">' +
+        `<span class="model-amount">${fmtUSD(a.amount_usd)}${estBadge}</span>` +
+        "</span>" +
+        "</div>"
+      );
+    }).join("");
+
     return (
-      '<div class="model-row">' +
-      `<span class="model-label" title="${esc(a.name)}">${esc(a.name)}</span>` +
-      '<div class="model-bar-track">' +
-      `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` +
+      '<div class="attribution-group">' +
+      `<div class="attribution-group-label">${esc(PROVIDER_LABELS[providerName] || providerName)}` +
+      (scopeLabel ? ` <span class="attribution-scope">${esc(scopeLabel)}</span>` : "") +
       "</div>" +
-      '<span class="model-stats">' +
-      `<span class="model-amount">${fmtUSD(a.amount_usd)}${estBadge}</span>` +
-      "</span>" +
+      bars +
       "</div>"
     );
   }).join("");
@@ -601,9 +683,10 @@ function renderSubscriptions(subscriptions) {
   ).join("");
 }
 
-const fmtMonthRange = (daysElapsed) => {
-  const month = new Date().toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
-  return `${month} 1–${daysElapsed}`;
+const fmtMonthRange = (sel, daysElapsed) => {
+  const label = new Date(Date.UTC(sel.year, sel.month - 1, 1))
+    .toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+  return `${label} 1–${daysElapsed}`;
 };
 
 function showBudgetForm(accessToken, currentValue) {
@@ -641,14 +724,16 @@ function showBudgetForm(accessToken, currentValue) {
 
 // Neutral below ~75% of budget, amber approaching, red at or over. No budget
 // set (or budget of 0) is always neutral — there's nothing to be over.
-function budgetStatus(forecast, budget) {
-  if (budget == null || budget <= 0) return null;
-  if (forecast >= budget) return "danger";
-  if (forecast >= budget * 0.75) return "warning";
+// `amount`: forecast for the current month (a projection), or MTD for a
+// past month (already the final, known total) — whichever the caller has.
+function budgetStatus(amount, budget) {
+  if (amount == null || budget == null || budget <= 0) return null;
+  if (amount >= budget) return "danger";
+  if (amount >= budget * 0.75) return "warning";
   return null;
 }
 
-function renderSummary(summary, accessToken) {
+function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth) {
   const row = document.getElementById("summary-row");
   if (!summary) {
     row.style.display = "none";
@@ -658,13 +743,17 @@ function renderSummary(summary, accessToken) {
 
   const { mtd, forecast, days_elapsed, budget } = summary;
 
+  document.getElementById("mtd-label").textContent = isCurrentMonth ? "Month to Date" : "Total";
   document.getElementById("mtd-value").textContent = fmtUSD(mtd);
-  document.getElementById("mtd-range").textContent = fmtMonthRange(days_elapsed);
+  document.getElementById("mtd-range").textContent = fmtMonthRange(selectedMonth, days_elapsed);
 
-  const status = budgetStatus(forecast, budget);
+  // Forecast is null for a past month — it's already over, not a
+  // projection. Budget status falls back to the known MTD/total instead.
+  const status = budgetStatus(forecast ?? mtd, budget);
   const forecastEl = document.getElementById("forecast-value");
-  forecastEl.textContent = fmtUSD(forecast);
-  forecastEl.className = "stat-card-value" + (status ? ` stat-${status}` : "");
+  forecastEl.textContent = forecast == null ? "—" : fmtUSD(forecast);
+  forecastEl.className = "stat-card-value" + (isCurrentMonth && status ? ` stat-${status}` : "");
+  document.getElementById("forecast-meta").textContent = isCurrentMonth ? "est. month-end" : "month complete";
 
   const budgetContent = document.getElementById("budget-content");
   if (budget != null) {
@@ -686,6 +775,18 @@ function renderSummary(summary, accessToken) {
   }
 }
 
+// Labels that only depend on which month is selected (not on fetched data)
+// update immediately on month change, before the fetch even lands — no
+// flash of the previous month's label while loading.
+function updateMonthUI() {
+  const label = monthLabel(selectedMonth);
+  document.getElementById("month-label").textContent = label;
+  document.getElementById("month-next").disabled = isSelectedMonthCurrent(selectedMonth);
+  document.getElementById("subtitle").textContent = `AI API spend, daily, ${label} (UTC)`;
+  document.getElementById("models-label").textContent = `Spend by model (${label})`;
+  document.getElementById("attribution-label").textContent = `Spend by project (${label})`;
+}
+
 function loadDashboard(accessToken, forceRefreshOverride) {
   // Set by the Integrations page right after connecting/disconnecting a
   // provider, or by a successful budget save — bypass the cache once so
@@ -693,7 +794,10 @@ function loadDashboard(accessToken, forceRefreshOverride) {
   const sessionFlag = sessionStorage.getItem("camaze_keys_changed");
   if (sessionFlag) sessionStorage.removeItem("camaze_keys_changed");
   const forceRefresh = forceRefreshOverride || !!sessionFlag;
-  const url = "/api/costs" + (forceRefresh ? "?refresh=1" : "");
+  const params = new URLSearchParams({ month: monthStr(selectedMonth) });
+  if (forceRefresh) params.set("refresh", "1");
+  const url = "/api/costs?" + params;
+  const isCurrentMonth = isSelectedMonthCurrent(selectedMonth);
 
   fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
     .then(async (res) => {
@@ -713,7 +817,7 @@ function loadDashboard(accessToken, forceRefreshOverride) {
       renderModels(data.models);
       renderAttribution(data.attribution);
       renderSubscriptions(data.subscriptions);
-      renderSummary(data.summary, accessToken);
+      renderSummary(data.summary, accessToken, selectedMonth, isCurrentMonth);
     })
     .catch((err) => {
       document.getElementById("content").innerHTML =
@@ -750,6 +854,19 @@ function loadDashboard(accessToken, forceRefreshOverride) {
     window.location.replace("/login.html");
   });
 
+  document.getElementById("month-prev").addEventListener("click", () => {
+    selectedMonth = shiftMonth(selectedMonth, -1);
+    updateMonthUI();
+    loadDashboard(session.access_token);
+  });
+  document.getElementById("month-next").addEventListener("click", () => {
+    if (isSelectedMonthCurrent(selectedMonth)) return;
+    selectedMonth = shiftMonth(selectedMonth, 1);
+    updateMonthUI();
+    loadDashboard(session.access_token);
+  });
+
+  updateMonthUI();
   loadDashboard(session.access_token);
 })();
 </script>

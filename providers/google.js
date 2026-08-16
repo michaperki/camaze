@@ -123,11 +123,11 @@ async function findBillingTable(project, dataset, accessToken) {
   return table;
 }
 
-// `start`: Date (UTC midnight). `overrides`: per-user
+// `start`/`end`: Date objects, end exclusive. `overrides`: per-user
 // { serviceAccountJson, project, dataset }, each falling back to its env
 // var when absent. Throws on config/auth/query errors. Returns
 // { days, models } — both derived from the same query.
-async function fetchCosts(start, overrides = {}) {
+async function fetchCosts(start, end, overrides = {}) {
   const project = overrides.project || process.env.GOOGLE_BILLING_PROJECT;
   if (!project) throw new Error("GOOGLE_BILLING_PROJECT is not set in .env");
   const dataset = overrides.dataset || process.env.GOOGLE_BILLING_DATASET || "billing_export";
@@ -155,6 +155,7 @@ async function fetchCosts(start, overrides = {}) {
       ) AS amount_usd
     FROM \`${project}.${dataset}.${table}\`
     WHERE usage_start_time >= TIMESTAMP('${start.toISOString()}')
+      AND usage_start_time < TIMESTAMP('${end.toISOString()}')
     GROUP BY day, model, project_id, project_name
     ORDER BY day`;
 

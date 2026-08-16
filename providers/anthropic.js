@@ -5,10 +5,10 @@ const { estimateCost } = require("../lib/pricing");
 const ORG_BASE = "https://api.anthropic.com/v1/organizations";
 const API_URL = `${ORG_BASE}/cost_report`;
 
-// `start`: Date (UTC midnight). `keyOverride`: use this key instead of the
-// env var (per-user keys). Throws on missing key or API error. Returns
-// { days, models } — both derived from the same request.
-async function fetchCosts(start, keyOverride) {
+// `start`/`end`: Date objects, end exclusive. `keyOverride`: use this key
+// instead of the env var (per-user keys). Throws on missing key or API
+// error. Returns { days, models } — both derived from the same request.
+async function fetchCosts(start, end, keyOverride) {
   const key = keyOverride || process.env.ANTHROPIC_ADMIN_KEY;
   if (!key) throw new Error("ANTHROPIC_ADMIN_KEY is not set in .env");
 
@@ -19,6 +19,7 @@ async function fetchCosts(start, keyOverride) {
   do {
     const params = new URLSearchParams({
       starting_at: start.toISOString(),
+      ending_at: end.toISOString(),
       bucket_width: "1d",
       limit: "31",
     });
