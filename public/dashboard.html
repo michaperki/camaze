@@ -971,6 +971,50 @@ function updateMonthUI() {
   document.getElementById("attribution-label").textContent = `Spend by project (${label})`;
 }
 
+// Fetched-month cache, keyed by "YYYY-MM" — re-selecting a month already
+// viewed this session (via prev/next) renders straight from memory instead
+// of round-tripping to /api/costs again. Page-lifetime only (a plain JS
+// Map, not sessionStorage), so a full reload always starts fresh. Closed
+// months never change, so their entries live for the page's lifetime; the
+// current month is still accruing spend, so its entry expires after
+// CLIENT_CACHE_TTL_MS (matching the server's own CACHE_TTL_MS in
+// api/costs.js) rather than serving an increasingly stale total on a
+// long-lived tab.
+const monthCache = new Map(); // monthStr -> { data, fetchedAt }
+const CLIENT_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function isMonthCacheFresh(key, entry) {
+  if (key !== monthStr(currentMonthUTC())) return true; // closed months don't expire
+  return Date.now() - entry.fetchedAt < CLIENT_CACHE_TTL_MS;
+}
+
+function applyDashboardData(data, accessToken, sel, isCurrentMonth) {
+  if (data.no_keys) {
+    document.getElementById("content").innerHTML =
+      '<div class="message">No providers connected yet. ' +
+      '<a href="/integrations.html">Go to Integrations</a> to get started.</div>';
+    renderModels([]);
+    renderAttribution([]);
+    renderSubscriptions([]);
+    renderSummary(null);
+    return;
+  }
+  render(data);
+  renderModels(data.models);
+  renderAttribution(data.attribution);
+  renderSubscriptions(data.subscriptions, data.totals?.subscriptions);
+  renderSummary(data.summary, accessToken, sel, isCurrentMonth);
+}
+
+function showLoadError(err) {
+  document.getElementById("content").innerHTML =
+    '<div class="message">Could not load cost data: ' + esc(err.message) + "</div>";
+  renderModels([]);
+  renderAttribution([]);
+  renderSubscriptions([]);
+  renderSummary(null);
+}
+
 function loadDashboard(accessToken, forceRefreshOverride) {
   // Set by the Integrations page right after connecting/disconnecting a
   // provider, or by a successful budget save — bypass the cache once so
@@ -978,39 +1022,50 @@ function loadDashboard(accessToken, forceRefreshOverride) {
   const sessionFlag = sessionStorage.getItem("camaze_keys_changed");
   if (sessionFlag) sessionStorage.removeItem("camaze_keys_changed");
   const forceRefresh = forceRefreshOverride || !!sessionFlag;
-  const params = new URLSearchParams({ month: monthStr(selectedMonth) });
+  const sel = selectedMonth;
+  const key = monthStr(sel);
+  const isCurrentMonth = isSelectedMonthCurrent(sel);
+
+  if (forceRefresh) monthCache.delete(key);
+
+  const cached = monthCache.get(key);
+  if (cached && isMonthCacheFresh(key, cached)) {
+    applyDashboardData(cached.data, accessToken, sel, isCurrentMonth);
+    return Promise.resolve();
+  }
+
+  const params = new URLSearchParams({ month: key });
   if (forceRefresh) params.set("refresh", "1");
   const url = "/api/costs?" + params;
-  const isCurrentMonth = isSelectedMonthCurrent(selectedMonth);
 
-  fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
+  return fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
     .then(async (res) => {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      if (data.no_keys) {
-        document.getElementById("content").innerHTML =
-          '<div class="message">No providers connected yet. ' +
-          '<a href="/integrations.html">Go to Integrations</a> to get started.</div>';
-        renderModels([]);
-        renderAttribution([]);
-        renderSubscriptions([]);
-        renderSummary(null);
-        return;
-      }
-      render(data);
-      renderModels(data.models);
-      renderAttribution(data.attribution);
-      renderSubscriptions(data.subscriptions, data.totals?.subscriptions);
-      renderSummary(data.summary, accessToken, selectedMonth, isCurrentMonth);
+      monthCache.set(key, { data, fetchedAt: Date.now() });
+      // The user may have navigated to a different month while this was in
+      // flight — only render if we're still looking at the month we asked for.
+      if (monthStr(selectedMonth) === key) applyDashboardData(data, accessToken, sel, isCurrentMonth);
     })
     .catch((err) => {
-      document.getElementById("content").innerHTML =
-        '<div class="message">Could not load cost data: ' + esc(err.message) + "</div>";
-      renderModels([]);
-      renderAttribution([]);
-      renderSubscriptions([]);
-      renderSummary(null);
+      if (monthStr(selectedMonth) === key) showLoadError(err);
     });
+}
+
+// Warms the cache for one month in the background, without rendering.
+// Best-effort: a failed prefetch is silently dropped, since the next real
+// navigation to that month just falls through to a normal fetch.
+function prefetchMonth(accessToken, sel) {
+  const key = monthStr(sel);
+  const existing = monthCache.get(key);
+  if (existing && isMonthCacheFresh(key, existing)) return;
+  const params = new URLSearchParams({ month: key });
+  fetch("/api/costs?" + params, { headers: { Authorization: `Bearer ${accessToken}` } })
+    .then((res) => res.json())
+    .then((data) => {
+      if (!data.error) monthCache.set(key, { data, fetchedAt: Date.now() });
+    })
+    .catch(() => {});
 }
 
 (async () => {
@@ -1051,7 +1106,16 @@ function loadDashboard(accessToken, forceRefreshOverride) {
   });
 
   updateMonthUI();
-  loadDashboard(session.access_token);
+  // Prefetch only fires once the current month has rendered, and only one
+  // month back — it doesn't block first paint since it's just scheduling a
+  // background fetch after the initial render's promise chain settles. The
+  // extra ~2s delay skips the prefetch entirely for users who load the page
+  // and immediately navigate away, so it only pays for itself for users
+  // actually sticking around.
+  loadDashboard(session.access_token).then(() => {
+    const prevMonth = shiftMonth(selectedMonth, -1);
+    setTimeout(() => prefetchMonth(session.access_token, prevMonth), 2000);
+  });
 })();
 </script>
 </body>

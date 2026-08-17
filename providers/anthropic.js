@@ -1,6 +1,7 @@
 // Anthropic Admin API cost report -> normalized [{ date, provider, amount_usd }]
 const crypto = require("node:crypto");
 const { resolvePrice, warnUnknownModel, ensurePricesLoaded } = require("../lib/pricing");
+const timing = require("../lib/timing");
 
 const ORG_BASE = "https://api.anthropic.com/v1/organizations";
 const API_URL = `${ORG_BASE}/cost_report`;
@@ -30,12 +31,12 @@ async function fetchCosts(start, end, keyOverride) {
     params.append("group_by[]", "description");
     if (page) params.set("page", page);
 
-    const res = await fetch(`${API_URL}?${params}`, {
+    const res = await timing.mark("anthropic:cost_report_request", () => fetch(`${API_URL}?${params}`, {
       headers: {
         "x-api-key": key,
         "anthropic-version": "2023-06-01",
       },
-    });
+    }));
     const body = await res.json().catch(() => null);
     if (!res.ok) {
       throw new Error(body?.error?.message || `HTTP ${res.status} from Anthropic API`);
@@ -143,9 +144,9 @@ async function listNames(path, key) {
   do {
     const params = new URLSearchParams({ limit: "1000" });
     if (afterId) params.set("after_id", afterId);
-    const res = await fetch(`${ORG_BASE}/${path}?${params}`, {
+    const res = await timing.mark(`anthropic:${path}_names_request`, () => fetch(`${ORG_BASE}/${path}?${params}`, {
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
-    });
+    }));
     const body = await res.json().catch(() => null);
     if (!res.ok) {
       throw new Error(body?.error?.message || `HTTP ${res.status} from Anthropic API (${path})`);
@@ -184,9 +185,9 @@ async function fetchWorkspaceCosts(start, end, key) {
     params.append("group_by[]", "workspace_id");
     if (page) params.set("page", page);
 
-    const res = await fetch(`${API_URL}?${params}`, {
+    const res = await timing.mark("anthropic:workspace_cost_request", () => fetch(`${API_URL}?${params}`, {
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
-    });
+    }));
     const body = await res.json().catch(() => null);
     if (!res.ok) {
       throw new Error(body?.error?.message || `HTTP ${res.status} from Anthropic API (cost_report)`);
@@ -239,9 +240,9 @@ async function fetchApiKeyUsageEstimate(start, end, key) {
     params.append("group_by[]", "model");
     if (page) params.set("page", page);
 
-    const res = await fetch(`${ORG_BASE}/usage_report/messages?${params}`, {
+    const res = await timing.mark("anthropic:usage_report_request", () => fetch(`${ORG_BASE}/usage_report/messages?${params}`, {
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
-    });
+    }));
     const body = await res.json().catch(() => null);
     if (!res.ok) {
       throw new Error(body?.error?.message || `HTTP ${res.status} from Anthropic API (usage_report)`);

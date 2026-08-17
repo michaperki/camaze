@@ -1,5 +1,6 @@
 // OpenAI organization Costs API -> normalized [{ date, provider, amount_usd }]
 const crypto = require("node:crypto");
+const timing = require("../lib/timing");
 
 const ORG_BASE = "https://api.openai.com/v1/organization";
 const API_URL = `${ORG_BASE}/costs`;
@@ -33,9 +34,9 @@ async function fetchCosts(start, end, keyOverride) {
     params.append("group_by", "line_item");
     if (page) params.set("page", page);
 
-    const res = await fetch(`${API_URL}?${params}`, {
+    const res = await timing.mark("openai:costs_request", () => fetch(`${API_URL}?${params}`, {
       headers: { Authorization: `Bearer ${key}` },
-    });
+    }));
     const body = await res.json().catch(() => null);
     if (!res.ok) {
       throw new Error(body?.error?.message || `HTTP ${res.status} from OpenAI API`);
@@ -121,9 +122,9 @@ async function listProjects(key) {
   do {
     const params = new URLSearchParams({ limit: "100" });
     if (after) params.set("after", after);
-    const res = await fetch(`${ORG_BASE}/projects?${params}`, {
+    const res = await timing.mark("openai:projects_request", () => fetch(`${ORG_BASE}/projects?${params}`, {
       headers: { Authorization: `Bearer ${key}` },
-    });
+    }));
     const body = await res.json().catch(() => null);
     if (!res.ok) {
       throw new Error(body?.error?.message || `HTTP ${res.status} from OpenAI API (projects)`);
@@ -176,9 +177,9 @@ async function fetchAttribution(start, end, keyOverride) {
     params.append("group_by", "project_id");
     if (page) params.set("page", page);
 
-    const res = await fetch(`${API_URL}?${params}`, {
+    const res = await timing.mark("openai:attribution_costs_request", () => fetch(`${API_URL}?${params}`, {
       headers: { Authorization: `Bearer ${key}` },
-    });
+    }));
     const body = await res.json().catch(() => null);
     if (!res.ok) {
       throw new Error(body?.error?.message || `HTTP ${res.status} from OpenAI API`);

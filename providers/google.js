@@ -6,6 +6,7 @@
 // with Node's crypto, exchanged for an OAuth access token.
 const crypto = require("node:crypto");
 const fs = require("node:fs");
+const timing = require("../lib/timing");
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const BQ_BASE = "https://bigquery.googleapis.com/bigquery/v2";
@@ -67,14 +68,14 @@ async function getAccessToken(inlineJson) {
     .sign("RSA-SHA256", Buffer.from(unsigned), key.private_key)
     .toString("base64url");
 
-  const res = await fetch(TOKEN_URL, {
+  const res = await timing.mark("google:auth_token_request", () => fetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
       assertion: `${unsigned}.${signature}`,
     }),
-  });
+  }));
   const body = await res.json().catch(() => null);
   if (!res.ok) {
     throw new Error(`Google auth failed: ${body?.error_description || body?.error || `HTTP ${res.status}`}`);
@@ -107,7 +108,7 @@ async function bq(pathOrUrl, accessToken, options = {}) {
 async function findBillingTable(project, dataset, accessToken) {
   let body;
   try {
-    body = await bq(`/projects/${project}/datasets/${dataset}/tables?maxResults=100`, accessToken);
+    body = await timing.mark("google:find_table_request", () => bq(`/projects/${project}/datasets/${dataset}/tables?maxResults=100`, accessToken));
   } catch (e) {
     if (e.status === 404) {
       throw new Error(`BigQuery dataset "${dataset}" not found in project "${project}" — check GOOGLE_BILLING_DATASET, or enable billing export first`);
@@ -171,10 +172,10 @@ async function fetchCosts(start, end, overrides = {}) {
     GROUP BY day, model, project_id, project_name
     ORDER BY day`;
 
-  const result = await bq(`/projects/${project}/queries`, accessToken, {
+  const result = await timing.mark("google:query_request", () => bq(`/projects/${project}/queries`, accessToken, {
     method: "POST",
     body: JSON.stringify({ query: sql, useLegacySql: false, timeoutMs: 30_000 }),
-  });
+  }));
   if (!result.jobComplete) {
     throw new Error("BigQuery query did not complete within 30s — try again");
   }
