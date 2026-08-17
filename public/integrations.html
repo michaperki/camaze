@@ -250,6 +250,7 @@ const PROVIDERS = [
     instructions: `
       <p>This lets camaze read your Anthropic spend — it can't send messages or spend your credits.</p>
       <ol>
+        <li>First, make sure your Anthropic account has an organization. Go to <a href="https://console.anthropic.com/settings/organization" target="_blank" rel="noopener">Settings &rarr; Organization</a> in the Anthropic Console and create one if you haven't already. Admin keys aren't available on personal accounts.</li>
         <li>Go to <a href="https://console.anthropic.com/settings/admin-keys" target="_blank" rel="noopener">console.anthropic.com</a> and sign in.</li>
         <li>In the left sidebar, click <strong>Settings</strong>, then <strong>Admin keys</strong>.</li>
         <li>Click <strong>Create Key</strong>, give it any name, and copy the key (starts with <code>sk-ant-admin...</code>). You won't be able to see it again after this.</li>

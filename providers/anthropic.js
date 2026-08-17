@@ -84,6 +84,22 @@ async function fetchCosts(start, end, keyOverride) {
   };
 }
 
+// The Admin API (and thus admin keys) doesn't exist for personal Anthropic
+// accounts — only for accounts that have set up an organization. Anthropic
+// reports that as a permission/not-found style error, not anything that
+// names "organization" itself, so callers would otherwise see a confusing
+// raw API message with no indication of the actual fix.
+function isOrgRequiredError(status, body) {
+  const type = body?.error?.type;
+  const message = body?.error?.message || "";
+  if (type === "permission_error" || status === 403) return true;
+  if (status === 404 && /organization/i.test(message)) return true;
+  return false;
+}
+
+const ORG_REQUIRED_MESSAGE =
+  "This key doesn't have access to the Admin API. Admin keys require your Anthropic account to have an organization — go to Settings → Organization in the Anthropic Console, create one if you haven't already, then generate a new admin key.";
+
 // Minimal authenticated request — confirms a key works before it's saved,
 // without pulling a full cost report. Throws with the API's error message.
 async function validateKey(key) {
@@ -104,6 +120,7 @@ async function validateKey(key) {
   });
   if (res.ok) return;
   const body = await res.json().catch(() => null);
+  if (isOrgRequiredError(res.status, body)) throw new Error(ORG_REQUIRED_MESSAGE);
   throw new Error(body?.error?.message || `HTTP ${res.status} from Anthropic API`);
 }
 
