@@ -211,6 +211,20 @@
     border-bottom-color: var(--series-1);
     font-weight: 600;
   }
+  /* Both panes are stacked in the same grid cell instead of toggled with
+     display:none, so the grid row's auto height is the taller of the two —
+     switching tabs can't resize the card, and the shorter tab just leaves
+     whitespace. Each pane also caps its own height and scrolls internally
+     if its content genuinely exceeds that, rather than growing the row
+     (and the card) without bound. */
+  .breakdown-body { display: grid; grid-template-columns: 1fr; }
+  .breakdown-body > div {
+    grid-area: 1 / 1;
+    min-height: 0;
+    max-height: 360px;
+    overflow-y: auto;
+  }
+  .breakdown-body > .pane-hidden { visibility: hidden; pointer-events: none; }
   #subscriptions-card { margin-top: 16px; }
   #subscriptions-card > summary {
     cursor: pointer;
@@ -281,14 +295,30 @@
     margin: 14px 0 0;
   }
   .section-footnote-warning { color: var(--warning); }
-  .attribution-group { margin-top: 16px; }
-  .attribution-group:first-child { margin-top: 0; }
-  .attribution-group-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin-bottom: 4px;
+  /* One shared grid for the whole project view (all three provider groups),
+     instead of each .model-row being its own independent 3-column grid —
+     that's what let column widths drift row to row before, since a fixed
+     column set never aligned across rows with very different label lengths
+     (API key names vs. project names). Flattening .model-row's children
+     into this grid (display:contents) makes every bar track and amount in
+     every group share the same two column edges, the way the model list's
+     more uniform label lengths made it look aligned already. */
+  #attribution-content {
+    display: grid;
+    grid-template-columns: minmax(0, 180px) 1fr auto;
+    align-items: center;
+    column-gap: 12px;
+    row-gap: 6px;
   }
+  #attribution-content .model-row { display: contents; }
+  .attribution-group-label {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin: 0;
+  }
+  .attribution-group-label:not(:first-child) { margin-top: 10px; }
   .attribution-scope { font-weight: 400; color: var(--text-muted); }
   #summary-row {
     display: none;
@@ -390,18 +420,16 @@
         <button type="button" class="breakdown-tab active" id="tab-models" data-tab="models" role="tab" aria-selected="true">By model</button>
         <button type="button" class="breakdown-tab" id="tab-attribution" data-tab="attribution" role="tab" aria-selected="false">By project</button>
       </div>
-      <div id="models-pane">
-        <div class="stat-label" id="models-label">Spend by model</div>
-        <div id="models-content"></div>
-      </div>
-      <div id="attribution-pane" style="display:none">
-        <div class="stat-label" id="attribution-label">Spend by project</div>
-        <div id="attribution-content"></div>
-        <p class="section-footnote" id="attribution-footnote" style="display:none">
-          Figures marked "est." are derived from token counts, not billed dollars — Anthropic doesn't report
-          per-API-key cost directly.
-        </p>
-        <p class="section-footnote section-footnote-warning" id="attribution-unpriced-note" style="display:none"></p>
+      <div class="breakdown-body">
+        <div id="models-pane">
+          <div class="stat-label" id="models-label">Spend by model</div>
+          <div id="models-content"></div>
+        </div>
+        <div id="attribution-pane" class="pane-hidden">
+          <div class="stat-label" id="attribution-label">Spend by project</div>
+          <div id="attribution-content"></div>
+          <p class="section-footnote section-footnote-warning" id="attribution-unpriced-note" style="display:none"></p>
+        </div>
       </div>
     </div>
   </div>
@@ -704,17 +732,14 @@ const SCOPE_LABELS = { api_key: "by API key", workspace: "by workspace", project
 const PROVIDER_ORDER = ["anthropic", "openai", "google"];
 
 function renderAttribution(attribution) {
-  const footnote = document.getElementById("attribution-footnote");
   const unpricedNote = document.getElementById("attribution-unpriced-note");
   lastAttribution = attribution || [];
   updateBreakdownCardVisibility();
   if (lastAttribution.length === 0) {
     document.getElementById("attribution-content").innerHTML = "";
-    footnote.style.display = "none";
     unpricedNote.style.display = "none";
     return;
   }
-  footnote.style.display = attribution.some(a => a.estimated) ? "block" : "none";
 
   // Under-reporting must never be invisible: if any row hit a model with no
   // price-map entry, name every one of them here rather than letting the
@@ -747,11 +772,22 @@ function renderAttribution(attribution) {
     const fill = SERIES_VARS[providerName] || "var(--text-muted)";
     const scopeLabel = SCOPE_LABELS[rows[0].scope] || "";
 
+    const label =
+      `<div class="attribution-group-label">${esc(PROVIDER_LABELS[providerName] || providerName)}` +
+      (scopeLabel ? ` <span class="attribution-scope">${esc(scopeLabel)}</span>` : "") +
+      "</div>";
+
     const bars = rows.map(a => {
       // See the zero-amount guard in renderModels — same reasoning applies
       // here (e.g. a provider's "Default project" scope that spent $0).
       const pct = a.amount_usd > 0 && maxAmount > 0 ? Math.max((a.amount_usd / maxAmount) * 100, 1) : 0;
-      const estBadge = a.estimated ? '<span class="est-marker">est.</span>' : "";
+      // The "est." explanation used to be a standalone footnote line, which
+      // wrapped awkwardly at this card's narrower width — a tooltip on the
+      // badge itself carries the same explanation without needing layout
+      // space, the same way the "unpriced" badge already works.
+      const estBadge = a.estimated
+        ? `<span class="est-marker" title="Derived from token counts, not billed dollars — Anthropic doesn't report per-API-key cost directly.">est.</span>`
+        : "";
       const unpricedBadge = a.unpriced
         ? `<span class="unpriced-marker" title="${esc((a.unpricedModels || []).join(', '))}">unpriced</span>`
         : "";
@@ -768,14 +804,10 @@ function renderAttribution(attribution) {
       );
     }).join("");
 
-    return (
-      '<div class="attribution-group">' +
-      `<div class="attribution-group-label">${esc(PROVIDER_LABELS[providerName] || providerName)}` +
-      (scopeLabel ? ` <span class="attribution-scope">${esc(scopeLabel)}</span>` : "") +
-      "</div>" +
-      bars +
-      "</div>"
-    );
+    // No wrapping element around label+bars: #attribution-content is one
+    // shared grid (see its CSS), so the label and every group's rows need
+    // to be direct children of it for their columns to align.
+    return label + bars;
   }).join("");
 }
 
@@ -796,8 +828,8 @@ function applyBreakdownTab() {
   tabModels.setAttribute("aria-selected", String(isModels));
   tabAttribution.classList.toggle("active", !isModels);
   tabAttribution.setAttribute("aria-selected", String(!isModels));
-  document.getElementById("models-pane").style.display = isModels ? "block" : "none";
-  document.getElementById("attribution-pane").style.display = isModels ? "none" : "block";
+  document.getElementById("models-pane").classList.toggle("pane-hidden", !isModels);
+  document.getElementById("attribution-pane").classList.toggle("pane-hidden", isModels);
 }
 
 document.getElementById("tab-models").addEventListener("click", () => {
