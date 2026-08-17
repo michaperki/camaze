@@ -137,16 +137,28 @@ async function fetchCosts(start, end, overrides = {}) {
 
   // Daily total = cost + credits, converted to USD via the export's own
   // conversion rate (1 for USD-billed accounts). All services for now.
-  // Grouped by SKU too (the closest thing to a "model" in billing export —
+  // Grouped by model too (the closest thing to a "model" in billing export —
   // e.g. specific Vertex AI/Gemini line items) so spend can be broken down
   // per model alongside the daily totals, from the one query. Also grouped
   // by project (id + display name) so the same query yields a per-project
   // breakdown — this fans rows out further, but day/model totals below are
   // summed across whatever rows come back, so they're unaffected.
+  //
+  // "model" prefers the goog-generativelanguage-model label over sku.description:
+  // the Gemini API's input/output token SKUs each have their own description
+  // ("Generate content input token count gemini 3.5 flash text" vs "...output..."),
+  // which would otherwise fan a single model out into two unreadable rows. The
+  // label carries the same value on both, and is a compact slug (e.g.
+  // "gemini35flash") rather than free text — prettifyModel() on the dashboard
+  // reformats it. Falls back to sku.description when the label is absent
+  // (subscriptions, storage, and any other non-generative-API line item).
   const sql = `
     SELECT
       DATE(usage_start_time, 'UTC') AS day,
-      sku.description AS model,
+      COALESCE(
+        (SELECT value FROM UNNEST(labels) WHERE key = 'goog-generativelanguage-model' LIMIT 1),
+        sku.description
+      ) AS model,
       project.id AS project_id,
       project.name AS project_name,
       SUM(

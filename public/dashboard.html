@@ -615,6 +615,30 @@ function prettifyModel(provider, model) {
     if (!m) return stripped;
     return `GPT-${m[1]}${m[3] ? " " + m[3].replace(/-/g, " ") : ""}`;
   }
+  if (provider === "google") {
+    // The billing export's goog-generativelanguage-model label strips dots
+    // and dashes: "gemini-2.5-flash" -> "gemini25flash". Reconstruct the
+    // version number (first 1-2 digits after "gemini") and split the rest
+    // against a fixed vocabulary of known model-name words. A row that
+    // isn't this label at all (e.g. a raw sku.description fallback, which
+    // already reads as English) or a suffix we don't recognize is shown
+    // as-is rather than guessed at.
+    const m = model.match(/^gemini(\d)(\d)?([a-z0-9]*)$/i);
+    if (!m) return model;
+    const [, major, minor, rest] = m;
+    const version = minor ? `${major}.${minor}` : major;
+    const WORDS = ["flash", "pro", "lite", "nano", "ultra", "preview", "experimental", "exp",
+      "vision", "live", "image", "audio", "embedding", "thinking", "8b", "2b"];
+    const words = [];
+    let s = rest.toLowerCase();
+    while (s.length > 0) {
+      const w = WORDS.find(w => s.startsWith(w));
+      if (!w) return model; // unrecognized suffix — don't guess
+      words.push(/^\d+b$/.test(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1));
+      s = s.slice(w.length);
+    }
+    return ["Gemini", version, ...words].join(" ");
+  }
   return model;
 }
 
