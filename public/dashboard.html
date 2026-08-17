@@ -48,7 +48,7 @@
     color: var(--text-primary);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  main { max-width: 960px; margin: 0 auto; padding: 32px 20px 48px; }
+  main { max-width: 1400px; margin: 0 auto; padding: 32px 20px 48px; }
   .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
   #month-selector {
     display: flex;
@@ -78,7 +78,7 @@
   }
   #app-header { border-bottom: 1px solid var(--border); }
   .header-inner {
-    max-width: 960px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 0 20px;
     height: 56px;
@@ -174,7 +174,20 @@
   #tooltip .t-date { color: var(--text-secondary); margin-bottom: 3px; }
   #tooltip .t-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
   #tooltip .t-value { font-weight: 600; font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 12px; }
-  #breakdown-card { margin-top: 16px; }
+  /* The chart and breakdown cards live in a 2-column grid (dense layout
+     on wide screens); the grid's own `gap` supplies the spacing between
+     them, both as a column gap side-by-side and, once collapsed to a
+     single column below 1100px, as the row gap between the stacked cards
+     — so neither card needs its own margin-top. */
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    align-items: start;
+    gap: 16px;
+  }
+  @media (max-width: 1100px) {
+    .dashboard-grid { grid-template-columns: 1fr; }
+  }
   .breakdown-tabs {
     display: flex;
     gap: 16px;
@@ -368,26 +381,28 @@
       <div id="budget-content"></div>
     </div>
   </div>
-  <div class="card">
-    <div id="content"><div class="message">Loading cost data&hellip;</div></div>
-  </div>
-  <div class="card" id="breakdown-card" style="display:none">
-    <div class="breakdown-tabs" role="tablist">
-      <button type="button" class="breakdown-tab active" id="tab-models" data-tab="models" role="tab" aria-selected="true">By model</button>
-      <button type="button" class="breakdown-tab" id="tab-attribution" data-tab="attribution" role="tab" aria-selected="false">By project</button>
+  <div class="dashboard-grid">
+    <div class="card">
+      <div id="content"><div class="message">Loading cost data&hellip;</div></div>
     </div>
-    <div id="models-pane">
-      <div class="stat-label" id="models-label">Spend by model</div>
-      <div id="models-content"></div>
-    </div>
-    <div id="attribution-pane" style="display:none">
-      <div class="stat-label" id="attribution-label">Spend by project</div>
-      <div id="attribution-content"></div>
-      <p class="section-footnote" id="attribution-footnote" style="display:none">
-        Figures marked "est." are derived from token counts, not billed dollars — Anthropic doesn't report
-        per-API-key cost directly.
-      </p>
-      <p class="section-footnote section-footnote-warning" id="attribution-unpriced-note" style="display:none"></p>
+    <div class="card" id="breakdown-card" style="display:none">
+      <div class="breakdown-tabs" role="tablist">
+        <button type="button" class="breakdown-tab active" id="tab-models" data-tab="models" role="tab" aria-selected="true">By model</button>
+        <button type="button" class="breakdown-tab" id="tab-attribution" data-tab="attribution" role="tab" aria-selected="false">By project</button>
+      </div>
+      <div id="models-pane">
+        <div class="stat-label" id="models-label">Spend by model</div>
+        <div id="models-content"></div>
+      </div>
+      <div id="attribution-pane" style="display:none">
+        <div class="stat-label" id="attribution-label">Spend by project</div>
+        <div id="attribution-content"></div>
+        <p class="section-footnote" id="attribution-footnote" style="display:none">
+          Figures marked "est." are derived from token counts, not billed dollars — Anthropic doesn't report
+          per-API-key cost directly.
+        </p>
+        <p class="section-footnote section-footnote-warning" id="attribution-unpriced-note" style="display:none"></p>
+      </div>
     </div>
   </div>
   <details class="card" id="subscriptions-card" style="display:none">
@@ -500,7 +515,7 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
     return;
   }
 
-  const W = 920, H = 300;
+  const W = 920, H = 210;
   const m = { top: 8, right: 8, bottom: 26, left: 52 };
   const innerW = W - m.left - m.right;
   const innerH = H - m.top - m.bottom;
