@@ -841,20 +841,25 @@ document.getElementById("tab-attribution").addEventListener("click", () => {
   applyBreakdownTab();
 });
 
-function renderSubscriptions(subscriptions) {
+// `total`: the section's true total (lib/costs.js's totals.subscriptions),
+// summed before the >= $0.01 row filter — rows that individually round to
+// zero (e.g. BigQuery's "Active Logical Storage") can still add up to
+// something worth showing, even once they're dropped from the row list.
+function renderSubscriptions(subscriptions, total) {
   const card = document.getElementById("subscriptions-card");
-  if (!subscriptions || subscriptions.length === 0) {
+  const rows = subscriptions || [];
+  const totalAmount = total ?? rows.reduce((sum, s) => sum + s.amount_usd, 0);
+  if (totalAmount < 0.01) {
     card.style.display = "none";
     card.open = false;
     return;
   }
   card.style.display = "block";
 
-  const total = subscriptions.reduce((sum, s) => sum + s.amount_usd, 0);
   document.getElementById("subscriptions-summary").innerHTML =
-    `Subscriptions &amp; other charges &mdash; <span class="subscriptions-total">${fmtUSD(total)}</span>`;
+    `Subscriptions &amp; other charges &mdash; <span class="subscriptions-total">${fmtUSD(totalAmount)}</span>`;
 
-  document.getElementById("subscriptions-content").innerHTML = subscriptions.map(s =>
+  document.getElementById("subscriptions-content").innerHTML = rows.map(s =>
     '<div class="subscription-row">' +
     `<span class="subscription-name">${esc(s.name)}</span>` +
     `<span class="subscription-amount">${fmtUSD(s.amount_usd)}</span>` +
@@ -995,7 +1000,7 @@ function loadDashboard(accessToken, forceRefreshOverride) {
       render(data);
       renderModels(data.models);
       renderAttribution(data.attribution);
-      renderSubscriptions(data.subscriptions);
+      renderSubscriptions(data.subscriptions, data.totals?.subscriptions);
       renderSummary(data.summary, accessToken, selectedMonth, isCurrentMonth);
     })
     .catch((err) => {
