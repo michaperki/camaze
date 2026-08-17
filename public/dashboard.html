@@ -174,8 +174,36 @@
   #tooltip .t-date { color: var(--text-secondary); margin-bottom: 3px; }
   #tooltip .t-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
   #tooltip .t-value { font-weight: 600; font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 12px; }
-  #models-card { margin-top: 16px; }
+  #breakdown-card { margin-top: 16px; }
+  .breakdown-tabs {
+    display: flex;
+    gap: 16px;
+    margin: 0 0 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .breakdown-tab {
+    font: inherit;
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 0 0 8px;
+    margin: 0;
+    cursor: pointer;
+  }
+  .breakdown-tab:hover { color: var(--text-primary); }
+  .breakdown-tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--series-1);
+    font-weight: 600;
+  }
   #subscriptions-card { margin-top: 16px; }
+  #subscriptions-card > summary {
+    cursor: pointer;
+  }
+  #subscriptions-card > summary::marker { color: var(--text-muted); }
+  .subscriptions-total { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
   .subscription-row {
     display: flex;
     justify-content: space-between;
@@ -218,7 +246,6 @@
     color: var(--text-secondary);
     text-align: right;
   }
-  #attribution-card { margin-top: 16px; }
   .est-marker {
     font-size: 10px;
     color: var(--text-muted);
@@ -344,23 +371,29 @@
   <div class="card">
     <div id="content"><div class="message">Loading cost data&hellip;</div></div>
   </div>
-  <div class="card" id="models-card" style="display:none">
-    <div class="stat-label" id="models-label">Spend by model</div>
-    <div id="models-content"></div>
+  <div class="card" id="breakdown-card" style="display:none">
+    <div class="breakdown-tabs" role="tablist">
+      <button type="button" class="breakdown-tab active" id="tab-models" data-tab="models" role="tab" aria-selected="true">By model</button>
+      <button type="button" class="breakdown-tab" id="tab-attribution" data-tab="attribution" role="tab" aria-selected="false">By project</button>
+    </div>
+    <div id="models-pane">
+      <div class="stat-label" id="models-label">Spend by model</div>
+      <div id="models-content"></div>
+    </div>
+    <div id="attribution-pane" style="display:none">
+      <div class="stat-label" id="attribution-label">Spend by project</div>
+      <div id="attribution-content"></div>
+      <p class="section-footnote" id="attribution-footnote" style="display:none">
+        Figures marked "est." are derived from token counts, not billed dollars — Anthropic doesn't report
+        per-API-key cost directly.
+      </p>
+      <p class="section-footnote section-footnote-warning" id="attribution-unpriced-note" style="display:none"></p>
+    </div>
   </div>
-  <div class="card" id="attribution-card" style="display:none">
-    <div class="stat-label" id="attribution-label">Spend by project</div>
-    <div id="attribution-content"></div>
-    <p class="section-footnote" id="attribution-footnote" style="display:none">
-      Figures marked "est." are derived from token counts, not billed dollars — Anthropic doesn't report
-      per-API-key cost directly.
-    </p>
-    <p class="section-footnote section-footnote-warning" id="attribution-unpriced-note" style="display:none"></p>
-  </div>
-  <div class="card" id="subscriptions-card" style="display:none">
-    <div class="stat-label">Subscriptions &amp; other charges</div>
+  <details class="card" id="subscriptions-card" style="display:none">
+    <summary class="stat-label" id="subscriptions-summary">Subscriptions &amp; other charges</summary>
     <div id="subscriptions-content"></div>
-  </div>
+  </details>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -585,18 +618,24 @@ function prettifyModel(provider, model) {
   return model;
 }
 
+let lastModels = [];
+let lastAttribution = [];
+
 function renderModels(models) {
-  const card = document.getElementById("models-card");
-  if (!models || models.length === 0) {
-    card.style.display = "none";
+  lastModels = models || [];
+  updateBreakdownCardVisibility();
+  if (lastModels.length === 0) {
+    document.getElementById("models-content").innerHTML = "";
     return;
   }
-  card.style.display = "block";
 
-  const maxAmount = Math.max(...models.map(m => m.amount_usd));
-  const totalAmount = models.reduce((sum, m) => sum + m.amount_usd, 0);
-  document.getElementById("models-content").innerHTML = models.map(m => {
-    const pct = maxAmount > 0 ? Math.max((m.amount_usd / maxAmount) * 100, 1) : 0;
+  const maxAmount = Math.max(...lastModels.map(m => m.amount_usd));
+  const totalAmount = lastModels.reduce((sum, m) => sum + m.amount_usd, 0);
+  document.getElementById("models-content").innerHTML = lastModels.map(m => {
+    // A zero-amount row must draw no bar at all — flooring it to 1% (or
+    // relying on .model-bar's min-width) would render a sliver for a
+    // model that cost nothing.
+    const pct = m.amount_usd > 0 && maxAmount > 0 ? Math.max((m.amount_usd / maxAmount) * 100, 1) : 0;
     const share = totalAmount > 0 ? (m.amount_usd / totalAmount) * 100 : 0;
     const shareLabel = share > 0 && share < 1 ? share.toFixed(1) : Math.round(share);
     const fill = SERIES_VARS[m.provider] || "var(--text-muted)";
@@ -605,7 +644,7 @@ function renderModels(models) {
       '<div class="model-row">' +
       `<span class="model-label" title="${esc(m.model)}">${esc(label)}</span>` +
       '<div class="model-bar-track">' +
-      `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` +
+      (pct > 0 ? `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` : "") +
       "</div>" +
       '<span class="model-stats">' +
       `<span class="model-pct">${shareLabel}%</span>` +
@@ -626,14 +665,16 @@ const SCOPE_LABELS = { api_key: "by API key", workspace: "by workspace", project
 const PROVIDER_ORDER = ["anthropic", "openai", "google"];
 
 function renderAttribution(attribution) {
-  const card = document.getElementById("attribution-card");
   const footnote = document.getElementById("attribution-footnote");
   const unpricedNote = document.getElementById("attribution-unpriced-note");
-  if (!attribution || attribution.length === 0) {
-    card.style.display = "none";
+  lastAttribution = attribution || [];
+  updateBreakdownCardVisibility();
+  if (lastAttribution.length === 0) {
+    document.getElementById("attribution-content").innerHTML = "";
+    footnote.style.display = "none";
+    unpricedNote.style.display = "none";
     return;
   }
-  card.style.display = "block";
   footnote.style.display = attribution.some(a => a.estimated) ? "block" : "none";
 
   // Under-reporting must never be invisible: if any row hit a model with no
@@ -668,7 +709,9 @@ function renderAttribution(attribution) {
     const scopeLabel = SCOPE_LABELS[rows[0].scope] || "";
 
     const bars = rows.map(a => {
-      const pct = maxAmount > 0 ? Math.max((a.amount_usd / maxAmount) * 100, 1) : 0;
+      // See the zero-amount guard in renderModels — same reasoning applies
+      // here (e.g. a provider's "Default project" scope that spent $0).
+      const pct = a.amount_usd > 0 && maxAmount > 0 ? Math.max((a.amount_usd / maxAmount) * 100, 1) : 0;
       const estBadge = a.estimated ? '<span class="est-marker">est.</span>' : "";
       const unpricedBadge = a.unpriced
         ? `<span class="unpriced-marker" title="${esc((a.unpricedModels || []).join(', '))}">unpriced</span>`
@@ -677,7 +720,7 @@ function renderAttribution(attribution) {
         '<div class="model-row">' +
         `<span class="model-label" title="${esc(a.name)}">${esc(a.name)}</span>` +
         '<div class="model-bar-track">' +
-        `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` +
+        (pct > 0 ? `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` : "") +
         "</div>" +
         '<span class="model-stats">' +
         `<span class="model-amount">${fmtUSD(a.amount_usd)}${estBadge}${unpricedBadge}</span>` +
@@ -697,13 +740,48 @@ function renderAttribution(attribution) {
   }).join("");
 }
 
+// Shared card for both breakdown tabs — visible whenever either has data,
+// independent of which tab is currently active.
+function updateBreakdownCardVisibility() {
+  document.getElementById("breakdown-card").style.display =
+    (lastModels.length > 0 || lastAttribution.length > 0) ? "block" : "none";
+}
+
+let breakdownTab = "models";
+
+function applyBreakdownTab() {
+  const isModels = breakdownTab === "models";
+  const tabModels = document.getElementById("tab-models");
+  const tabAttribution = document.getElementById("tab-attribution");
+  tabModels.classList.toggle("active", isModels);
+  tabModels.setAttribute("aria-selected", String(isModels));
+  tabAttribution.classList.toggle("active", !isModels);
+  tabAttribution.setAttribute("aria-selected", String(!isModels));
+  document.getElementById("models-pane").style.display = isModels ? "block" : "none";
+  document.getElementById("attribution-pane").style.display = isModels ? "none" : "block";
+}
+
+document.getElementById("tab-models").addEventListener("click", () => {
+  breakdownTab = "models";
+  applyBreakdownTab();
+});
+document.getElementById("tab-attribution").addEventListener("click", () => {
+  breakdownTab = "attribution";
+  applyBreakdownTab();
+});
+
 function renderSubscriptions(subscriptions) {
   const card = document.getElementById("subscriptions-card");
   if (!subscriptions || subscriptions.length === 0) {
     card.style.display = "none";
+    card.open = false;
     return;
   }
   card.style.display = "block";
+
+  const total = subscriptions.reduce((sum, s) => sum + s.amount_usd, 0);
+  document.getElementById("subscriptions-summary").innerHTML =
+    `Subscriptions &amp; other charges &mdash; <span class="subscriptions-total">${fmtUSD(total)}</span>`;
 
   document.getElementById("subscriptions-content").innerHTML = subscriptions.map(s =>
     '<div class="subscription-row">' +
