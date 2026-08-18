@@ -76,34 +76,69 @@ function pickRotatingMonth(now, months) {
   return months[dayIndex % months.length];
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Reconciliation used to Promise.allSettled every connected user at once,
+// on top of the sync phase's own fan-out earlier in this same cron run —
+// that concurrency is exactly what tripped OpenAI's 30-requests/minute
+// limit during the initial backfill. This caps and rotates the user list
+// the same way pickRotatingMonth rotates months: a stable sort (so the
+// window is deterministic across runs) sliced into `count`-sized windows
+// that advance by `count` each day, wrapping around — so with N users and
+// a cap of 25, everyone is covered every ceil(N/25) days instead of never
+// (a fixed prefix would starve everyone past the cap forever).
+const RECONCILE_USER_CAP = 25;
+const RECONCILE_USER_DELAY_MS = 2000;
+
+function pickRotatingUsers(userIds, count, dayIndex) {
+  const sorted = [...userIds].sort();
+  if (sorted.length <= count) return { window: sorted, skipped: [] };
+  const start = (dayIndex * count) % sorted.length;
+  const window = [];
+  for (let i = 0; i < count; i++) window.push(sorted[(start + i) % sorted.length]);
+  const windowSet = new Set(window);
+  return { window, skipped: sorted.filter(id => !windowSet.has(id)) };
+}
+
 // Checks one closed month (see pickRotatingMonth) against a live fetch for
-// every connected user — the guard on the whole sync layer (lib/reconcile.js).
-// Deliberately last: it's the least urgent phase (nothing here is visible to
-// a user in real time the way a digest/alert email is), and a slow or
-// failing reconciliation run must never delay those emails going out.
+// up to RECONCILE_USER_CAP connected users (see pickRotatingUsers) — the
+// guard on the whole sync layer (lib/reconcile.js). Sequential with a delay
+// between users, not concurrent, and deliberately last: it's the least
+// urgent phase (nothing here is visible to a user in real time the way a
+// digest/alert email is), and a slow or failing reconciliation run must
+// never delay those emails going out.
 async function runReconciliation() {
-  const userIds = await listUsersWithProviderKeys();
+  const allUserIds = await listUsersWithProviderKeys();
   const now = new Date();
   const month = pickRotatingMonth(now, closedMonthsBack(now, 3));
-
-  const results = await Promise.allSettled(userIds.map(userId => reconcileUserMonth(userId, month)));
+  const dayIndex = Math.floor(now.getTime() / 86400000);
+  const { window: userIds, skipped } = pickRotatingUsers(allUserIds, RECONCILE_USER_CAP, dayIndex);
 
   let ok = 0, drift = 0, unchecked = 0, failed = 0;
   const driftDetails = [];
-  results.forEach((r, i) => {
-    if (r.status !== "fulfilled") {
+  for (let i = 0; i < userIds.length; i++) {
+    const userId = userIds[i];
+    try {
+      const result = await reconcileUserMonth(userId, month);
+      for (const row of result.checked) {
+        if (row.status === "drift") { drift++; driftDetails.push({ user_id: userId, month, provider: row.provider, diff_usd: row.diff_usd }); }
+        else if (row.status === "unchecked") unchecked++;
+        else ok++;
+      }
+    } catch (err) {
       failed++;
-      driftDetails.push({ user_id: userIds[i], month, error: r.reason.message });
-      return;
+      driftDetails.push({ user_id: userId, month, error: err.message });
     }
-    for (const row of r.value.checked) {
-      if (row.status === "drift") { drift++; driftDetails.push({ user_id: userIds[i], month, provider: row.provider, diff_usd: row.diff_usd }); }
-      else if (row.status === "unchecked") unchecked++;
-      else ok++;
-    }
-  });
+    if (i < userIds.length - 1) await sleep(RECONCILE_USER_DELAY_MS);
+  }
 
-  return { month, users: userIds.length, ok, drift, unchecked, failed, driftDetails };
+  if (skipped.length > 0) {
+    console.log(JSON.stringify({ event: "reconciliation_skipped", month, skipped }));
+  }
+
+  return { month, usersTotal: allUserIds.length, usersChecked: userIds.length, usersSkipped: skipped.length, ok, drift, unchecked, failed, driftDetails };
 }
 
 module.exports = async (req, res) => {
@@ -152,7 +187,10 @@ module.exports = async (req, res) => {
     // how badly) this phase goes.
     const reconciliation = await runReconciliation().catch((err) => {
       console.warn(`Reconciliation phase failed: ${err.message}`);
-      return { month: null, users: 0, ok: 0, drift: 0, unchecked: 0, failed: 0, driftDetails: [{ error: err.message }] };
+      return {
+        month: null, usersTotal: 0, usersChecked: 0, usersSkipped: 0,
+        ok: 0, drift: 0, unchecked: 0, failed: 0, driftDetails: [{ error: err.message }],
+      };
     });
     console.log(JSON.stringify({ event: "reconciliation_cron", ...reconciliation }));
 

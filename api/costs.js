@@ -6,7 +6,7 @@ const {
   fetchProviderAttribution, buildGoogleAttribution, costDataFromStoredRows,
 } = require("../lib/costs");
 const { getSyncState, getDailyCostRows, getMonthlyAttributionRows, storeSyncResult, syncUserMonth } = require("../lib/costSync");
-const { reconcileUserMonth, latestReconciliationByProvider } = require("../lib/reconcile");
+const { reconcileUserMonth, getReconciliationStatus } = require("../lib/reconcile");
 const timing = require("../lib/timing");
 const { performance } = require("node:perf_hooks");
 
@@ -41,6 +41,11 @@ module.exports = async (req, res) => {
   // this project was already at that limit. Plain POST (no action, or
   // action=backfill) keeps its original meaning.
   if (req.method === "POST" && req.query?.action === "reconcile") return reconcileNow(req, res);
+  // POST /api/costs?action=sync&month=YYYY-MM re-syncs just that one month
+  // (see lib/costSync.js) — used by the dashboard's "Re-sync this month"
+  // button on a drift banner, where a full 6-month backfill would be
+  // needless work and needlessly more provider traffic.
+  if (req.method === "POST" && req.query?.action === "sync") return syncOneMonth(req, res);
   // POST /api/costs syncs the calling user's last 6 months into Supabase —
   // this used to be its own api/backfill.js route, folded in here for the
   // same reason above.
@@ -104,6 +109,29 @@ async function backfill(req, res) {
   }
 }
 
+// Re-syncs one month for the calling user (see lib/costSync.js). Same
+// upsert/zero-out contract as the cron sync and the 6-month backfill above
+// — calling this again just re-syncs the same month harmlessly.
+async function syncOneMonth(req, res) {
+  const user = await verifyUser(req.headers.authorization).catch(() => null);
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const month = typeof req.query?.month === "string" && MONTH_RE.test(req.query.month) ? req.query.month : null;
+  if (!month) {
+    res.status(400).json({ error: "?month=YYYY-MM is required" });
+    return;
+  }
+
+  try {
+    const result = await syncUserMonth(user.id, month);
+    res.status(200).json({ ok: true, month, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
 // On-demand version of the cron's reconciliation phase (see
 // api/cron/digest.js's runReconciliation) for one month, for the calling
 // user — e.g. right after noticing drift, without waiting for the next
@@ -135,7 +163,7 @@ async function reconcileNow(req, res) {
 // live provider fetch or from costDataFromStoredRows(). `syncedAt`/
 // `fromSyncCache` tell the dashboard whether this response came from the
 // Supabase cache (so it can show "as of <time>") or a live fetch.
-function composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, syncedAt, fromSyncCache, reconciliation) {
+function composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, syncedAt, fromSyncCache, reconciliation, unverifiable) {
   return {
     ...costData,
     totals: {
@@ -146,6 +174,10 @@ function composeResponseData(costData, isCurrentMonth, daysInMonth, attribution,
     // Fixed costs fold into the month total and the subscriptions list —
     // never into `days` (they aren't daily spend, and inventing a per-day
     // slice for a flat subscription would be a lie the chart tells).
+    // Annual rows are shown here already divided by 12 (see lib/fixedCosts.js's
+    // rowContribution) — that math doesn't change, but `amortized`/
+    // `annual_usd`/`bills_on` let the dashboard mark the row so it doesn't
+    // read as a monthly charge the customer's card statement won't match.
     subscriptions: [
       ...costData.subscriptions,
       ...fixedCosts.rows.map(r => ({
@@ -153,6 +185,9 @@ function composeResponseData(costData, isCurrentMonth, daysInMonth, attribution,
         name: r.seats > 1 ? `${r.label} (×${r.seats})` : r.label,
         amount_usd: r.amount_usd,
         manual: true,
+        amortized: r.billing_period === "annual",
+        annual_usd: r.billing_period === "annual" ? r.unit_cost_usd * r.seats : null,
+        bills_on: r.billing_period === "annual" ? r.started_on : null,
       })),
     ].sort((a, b) => b.amount_usd - a.amount_usd),
     summary: buildSummary(costData.days, budget, isCurrentMonth, daysInMonth, fixedCosts.total),
@@ -165,13 +200,18 @@ function composeResponseData(costData, isCurrentMonth, daysInMonth, attribution,
     // enough to name the month/provider/amount, not the full stored/live
     // numbers (that's what the on-demand action is for).
     reconciliation,
+    // Providers whose last 3 consecutive reconciliation runs were all
+    // 'unchecked' — a live fetch that fails every time looks identical to a
+    // healthy one if only `reconciliation`'s latest-status is surfaced, so
+    // this is a separate, deliberately different signal: unknown, not wrong.
+    unverifiable,
   };
 }
 
 // Reconstructs this month's cost data entirely from daily_costs/
 // monthly_attribution — no provider call. Only used once the caller has
 // already confirmed cost_sync_state is usable (see handle() below).
-async function buildDataFromStore(userId, month, configuredProviders, syncState, budget, fixedCosts, reconciliation) {
+async function buildDataFromStore(userId, month, configuredProviders, syncState, budget, fixedCosts, reconciliation, unverifiable) {
   const [dailyRows, attributionRows] = await Promise.all([
     timing.mark("store:daily_costs", () => getDailyCostRows(userId, month)),
     timing.mark("store:monthly_attribution", () => getMonthlyAttributionRows(userId, month)),
@@ -181,7 +221,7 @@ async function buildDataFromStore(userId, month, configuredProviders, syncState,
   const { dayModels, projects, isCurrentMonth, daysInMonth, providerRawUsd, ...costData } = rawCostData;
   const attribution = attributionRows.sort((a, b) => b.amount_usd - a.amount_usd);
 
-  return composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, syncState.synced_at, true, reconciliation);
+  return composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, syncState.synced_at, true, reconciliation, unverifiable);
 }
 
 async function handle(req, res, handlerStart, coldStart, debugTiming) {
@@ -246,6 +286,7 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
         summary: null,
         attribution: [],
         reconciliation: [],
+        unverifiable: [],
         month,
         cached: false,
         cachedAt: new Date(now).toISOString(),
@@ -261,19 +302,20 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
     // is independent of which month is being viewed — it's "the last thing
     // the nightly check found," not scoped to `month` — so it's skipped
     // entirely for local dev/anonymous requests, same as the tables it reads.
-    const [budget, fixedCosts, reconciliation] = await Promise.all([
+    const [budget, fixedCosts, reconciliationStatus] = await Promise.all([
       timing.mark("budget", () => resolveBudget(user?.id)),
       timing.mark("fixedCosts", () => resolveFixedCosts(user?.id, month)),
       timing.mark("reconciliation", () => (!localDevFallback && user?.id
-        ? latestReconciliationByProvider(user.id).catch((e) => {
+        ? getReconciliationStatus(user.id).catch((e) => {
           console.warn(`Could not load reconciliation status: ${e.message}`);
-          return [];
+          return { latest: [], unverifiable: [] };
         })
-        : Promise.resolve([]))),
+        : Promise.resolve({ latest: [], unverifiable: [] }))),
     ]);
-    const reconciliationCompact = reconciliation.map(r => ({
+    const reconciliationCompact = reconciliationStatus.latest.map(r => ({
       month: r.month, provider: r.provider, status: r.status, diff_usd: r.diff_usd, checked_at: r.checked_at,
     }));
+    const unverifiable = reconciliationStatus.unverifiable;
 
     // Supabase-backed read path: a closed month never calls a provider once
     // it has ANY usable sync (it's final, so staleness doesn't matter); the
@@ -289,7 +331,7 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
     const syncIsFresh = syncIsUsable && (now - new Date(syncState.synced_at).getTime()) < SYNC_FRESH_MS;
 
     if (syncIsUsable && (isClosedMonth || syncIsFresh)) {
-      const data = await buildDataFromStore(user.id, month, configuredProviders, syncState, budget, fixedCosts, reconciliationCompact);
+      const data = await buildDataFromStore(user.id, month, configuredProviders, syncState, budget, fixedCosts, reconciliationCompact, unverifiable);
       cache.set(cacheKey, { data, fetchedAt: now });
       finish(200, { ...data, cached: false, cachedAt: new Date(now).toISOString() }, false);
       return;
@@ -321,7 +363,7 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
     const googleAttribution = buildGoogleAttribution(projects);
     const attribution = [...providerAttributionResult.attribution, ...googleAttribution].sort((a, b) => b.amount_usd - a.amount_usd);
 
-    const data = composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, new Date(now).toISOString(), false, reconciliationCompact);
+    const data = composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, new Date(now).toISOString(), false, reconciliationCompact, unverifiable);
     cache.set(cacheKey, { data, fetchedAt: now });
     finish(200, { ...data, cached: false, cachedAt: new Date(now).toISOString() }, false);
 

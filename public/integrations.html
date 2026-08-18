@@ -18,6 +18,7 @@
     --series-3:    #1baf7a;  /* Google */
     --accent:      #2a78d6;
     --danger:      #c0392b;
+    --warning:     #b45309;
     --ok-bg:       #e7f5ee;
     --ok-fg:       #1a7a4c;
   }
@@ -34,6 +35,7 @@
       --series-3:    #199e70;
       --accent:      #3987e5;
       --danger:      #e0655a;
+      --warning:     #f0b429;
       --ok-bg:       #113325;
       --ok-fg:       #4fd18f;
     }
@@ -220,6 +222,18 @@
   .row-fields { display: flex; gap: 8px; }
   .row-fields > div { flex: 1; }
   .fixed-cost-row-meta { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .fixed-cost-form-note { font-size: 12px; color: var(--text-muted); margin: 4px 0 0; }
+  .fixed-cost-stale-prompt {
+    display: block;
+    font-size: 12px;
+    color: var(--warning);
+    border: 1px solid var(--warning);
+    border-radius: 4px;
+    padding: 4px 8px;
+    margin-top: 6px;
+  }
+  .fixed-cost-stale-prompt .btn-text { font-size: 12px; margin-left: 6px; color: var(--warning); }
+  .fixed-cost-stale-prompt .btn-text:hover { color: var(--warning); }
 </style>
 </head>
 <body>
@@ -285,6 +299,7 @@
           <input type="date" name="ended_on">
         </div>
       </div>
+      <p class="fixed-cost-form-note">Applies to every month from the start date onward, including months you've already looked at on the dashboard — a past start date will change past totals, not just future ones.</p>
       <div class="form-actions">
         <button class="btn btn-primary" type="submit">Save</button>
         <button class="btn" type="button" id="cancel-fixed-cost-btn">Cancel</button>
@@ -545,15 +560,35 @@ async function main() {
   const fmtUSD = (v) => v.toLocaleString("en-US", { style: "currency", currency: "USD" });
   let lastFixedCosts = [];
 
+  // "Still active?" is a nudge, not an auto-expiry — nothing here ever
+  // changes ended_on on its own. Dismissal is in-memory only (not saved
+  // anywhere), so it reappears next visit; that's deliberate; this prompt
+  // only ever shows on Integrations, never on the dashboard.
+  const dismissedStalePrompts = new Set();
+  const SIX_MONTHS_MS = 6 * 30 * 24 * 60 * 60 * 1000;
+
+  function isStaleFixedCost(row) {
+    if (row.ended_on) return false;
+    return Date.now() - new Date(row.started_on + "T00:00:00Z").getTime() > SIX_MONTHS_MS;
+  }
+
   function fixedCostRowHtml(row) {
     const period = row.billing_period === "annual" ? "/yr" : "/mo";
     const seatsLabel = row.seats > 1 ? ` × ${row.seats} seats` : "";
     const endLabel = row.ended_on ? ` · ended ${esc(row.ended_on)}` : "";
+    const stalePrompt = (isStaleFixedCost(row) && !dismissedStalePrompts.has(row.id))
+      ? `<div class="fixed-cost-stale-prompt">
+           Still active? No end date, and it started ${esc(row.started_on)}.
+           <button class="btn-text" type="button" data-action="confirm-active" data-id="${esc(row.id)}">Yes, still active</button>
+           <button class="btn-text" type="button" data-action="set-end-date" data-id="${esc(row.id)}">Set end date</button>
+         </div>`
+      : "";
     return `
       <div class="row" data-fixed-cost-row="${esc(row.id)}">
         <span>
           <strong>${esc(row.vendor)}</strong> — ${esc(row.label)}
           <span class="fixed-cost-row-meta">${fmtUSD(row.unit_cost_usd)}${period}${seatsLabel} · since ${esc(row.started_on)}${endLabel}</span>
+          ${stalePrompt}
         </span>
         <span>
           <button class="btn-text" type="button" data-action="edit-fixed-cost" data-id="${esc(row.id)}">Edit</button>
@@ -605,6 +640,23 @@ async function main() {
     const editBtn = e.target.closest('[data-action="edit-fixed-cost"]');
     if (editBtn) {
       const row = lastFixedCosts.find(r => String(r.id) === editBtn.dataset.id);
+      if (row) openFixedCostForm(row);
+      return;
+    }
+
+    // Neither of these touches the row's data — "confirm-active" only
+    // dismisses the prompt in this browser tab; "set end date" just opens
+    // the existing edit form so the user fills it in themselves.
+    const confirmBtn = e.target.closest('[data-action="confirm-active"]');
+    if (confirmBtn) {
+      dismissedStalePrompts.add(confirmBtn.dataset.id);
+      renderFixedCosts(lastFixedCosts);
+      return;
+    }
+
+    const setEndDateBtn = e.target.closest('[data-action="set-end-date"]');
+    if (setEndDateBtn) {
+      const row = lastFixedCosts.find(r => String(r.id) === setEndDateBtn.dataset.id);
       if (row) openFixedCostForm(row);
       return;
     }

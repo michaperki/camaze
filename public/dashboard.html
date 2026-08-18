@@ -297,6 +297,14 @@
     padding: 0 3px;
     margin-left: 6px;
   }
+  .amortized-marker {
+    font-size: 10px;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0 3px;
+    margin-left: 2px;
+  }
   .section-footnote {
     font-size: 12px;
     color: var(--text-muted);
@@ -315,6 +323,30 @@
     margin: 0 0 14px;
   }
   #drift-banner strong { font-weight: 600; }
+  #drift-banner .resync-btn {
+    margin-left: 8px;
+    font-size: 12px;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    border-radius: 4px;
+    padding: 2px 8px;
+    background: none;
+    cursor: pointer;
+  }
+  #drift-banner .resync-btn:disabled { opacity: 0.6; cursor: default; }
+  #drift-banner .drift-item { display: block; margin-bottom: 4px; }
+  #drift-banner .drift-item:last-child { margin-bottom: 0; }
+  /* Distinct from drift on purpose (warning, not danger) — this means
+     "we don't know," not "we know it's wrong." */
+  #unverifiable-banner {
+    font-size: 13px;
+    color: var(--warning);
+    border: 1px solid var(--warning);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 0 0 14px;
+  }
+  #unverifiable-banner strong { font-weight: 600; }
   /* One shared grid for the whole project view (all three provider groups),
      instead of each .model-row being its own independent 3-column grid —
      that's what let column widths drift row to row before, since a fixed
@@ -410,6 +442,7 @@
 </header>
 <main>
   <div id="drift-banner" style="display:none"></div>
+  <div id="unverifiable-banner" style="display:none"></div>
   <div id="month-selector">
     <button id="month-prev" type="button" aria-label="Previous month">&larr;</button>
     <span id="month-label"></span>
@@ -886,10 +919,19 @@ function renderSubscriptions(subscriptions, total) {
     '<div class="subscription-row">' +
     `<span class="subscription-name">${esc(s.name)}` +
     (s.manual ? `<span class="manual-marker" title="Manually entered on the Integrations page — not reported by a provider API">manual</span>` : "") +
+    (s.amortized ? `<span class="amortized-marker" title="Billed ${esc(fmtUSD(s.annual_usd))}/year on ${esc(billsOnLabel(s.bills_on))} — shown here divided evenly across each month, so it won't match your card statement in the month it actually bills">amortized</span>` : "") +
     "</span>" +
     `<span class="subscription-amount">${fmtUSD(s.amount_usd)}</span>` +
     "</div>"
   ).join("");
+}
+
+// "YYYY-MM-DD" -> "Mar 14" — an annual fixed cost's started_on date is the
+// month/day it re-bills every year (see api/costs.js's `bills_on`); the
+// year it was first entered isn't the relevant part for that.
+function billsOnLabel(dateStr) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 // "YYYY-MM" -> "Jul 2026", for reconciliation rows (see lib/reconcile.js),
@@ -905,7 +947,10 @@ function monthStrLabel(monthStr) {
 // this is the guard on the whole sync layer, so a drift entry gets a loud,
 // always-visible banner rather than a console warning nobody sees. Not
 // scoped to the currently-viewed month: `reconciliation` is "the most
-// recent check per provider," independent of month navigation.
+// recent check per provider," independent of month navigation. One
+// "Re-sync this month" button per distinct drifted month (usually just
+// one) — clicking it re-syncs + re-checks just that month (resyncMonth
+// below), never the whole dashboard's worth of provider traffic.
 function renderDriftBanner(reconciliation) {
   const banner = document.getElementById("drift-banner");
   const drifted = (reconciliation || []).filter(r => r.status === "drift");
@@ -913,12 +958,75 @@ function renderDriftBanner(reconciliation) {
     banner.style.display = "none";
     return;
   }
-  const items = drifted
-    .map(r => `<strong>${esc(PROVIDER_LABELS[r.provider] || r.provider)}</strong> for ${esc(monthStrLabel(r.month))} (off by ${fmtUSD(Math.abs(r.diff_usd))})`)
-    .join(", ");
-  banner.innerHTML = `⚠ Stored cost data doesn't match what the provider reports: ${items}. ` +
-    `The numbers above may be off until this re-syncs.`;
+  const monthsWithButton = new Set();
+  banner.innerHTML = drifted
+    .map(r => {
+      // One button per distinct month — usually there's only one drifted
+      // month at a time, but if two providers drifted in the same month a
+      // single re-sync covers both.
+      let btn = "";
+      if (!monthsWithButton.has(r.month)) {
+        monthsWithButton.add(r.month);
+        btn = `<button type="button" class="resync-btn" data-action="resync-month" data-month="${esc(r.month)}">Re-sync this month</button>`;
+      }
+      return `<span class="drift-item">⚠ <strong>${esc(PROVIDER_LABELS[r.provider] || r.provider)}</strong> for ` +
+        `${esc(monthStrLabel(r.month))} is off by ${fmtUSD(Math.abs(r.diff_usd))} from what the provider reports.${btn}</span>`;
+    })
+    .join("");
   banner.style.display = "block";
+}
+
+// Providers whose last 3 consecutive reconciliation runs all failed to even
+// check (see lib/reconcile.js's getReconciliationStatus) — deliberately
+// separate from the drift banner above: this means "unknown," not "wrong,"
+// so it gets its own warning-colored (not danger-colored) box.
+function renderUnverifiableBanner(unverifiable) {
+  const banner = document.getElementById("unverifiable-banner");
+  const rows = unverifiable || [];
+  if (rows.length === 0) {
+    banner.style.display = "none";
+    return;
+  }
+  const items = rows
+    .map(r => `<strong>${esc(PROVIDER_LABELS[r.provider] || r.provider)}</strong> (${esc(monthStrLabel(r.month))})`)
+    .join(", ");
+  banner.innerHTML = `⚠ Couldn't verify stored data against ${items} — the last 3 checks all failed to reach the provider. ` +
+    `This doesn't mean the numbers are wrong, just unconfirmed.`;
+  banner.style.display = "block";
+}
+
+// Re-syncs one month, re-checks it, then refreshes whatever's on screen —
+// a single attempt per click, never an automatic retry loop. If it comes
+// back clean, the next render (driven by the forced reload below) simply
+// won't show that month/provider in drift anymore; if it's still drifting,
+// that same reload shows the re-measured (and possibly changed) diff, which
+// is the "say so plainly" the banner already does — no separate message to
+// juggle once the banner's DOM has been replaced by the reload.
+async function resyncMonth(month, accessToken, btn) {
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = "Syncing…";
+  try {
+    const syncRes = await fetch(`/api/costs?action=sync&month=${encodeURIComponent(month)}`, {
+      method: "POST", headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const syncData = await syncRes.json();
+    if (syncData.error) throw new Error(syncData.error);
+
+    btn.textContent = "Checking…";
+    const reconcileRes = await fetch(`/api/costs?action=reconcile&month=${encodeURIComponent(month)}`, {
+      method: "POST", headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const reconcileData = await reconcileRes.json();
+    if (reconcileData.error) throw new Error(reconcileData.error);
+
+    monthCache.delete(month);
+    await loadDashboard(accessToken, true);
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = originalText;
+    alert(`Re-sync failed: ${err.message}`);
+  }
 }
 
 const fmtMonthRange = (sel, daysElapsed) => {
@@ -1068,6 +1176,7 @@ function isMonthCacheFresh(key, entry) {
 
 function applyDashboardData(data, accessToken, sel, isCurrentMonth) {
   renderDriftBanner(data.reconciliation);
+  renderUnverifiableBanner(data.unverifiable);
   if (data.no_keys) {
     document.getElementById("content").innerHTML =
       '<div class="message">No providers connected yet. ' +
@@ -1170,6 +1279,14 @@ function prefetchMonth(accessToken, sel) {
   document.getElementById("signout-btn").addEventListener("click", async () => {
     await client.auth.signOut();
     window.location.replace("/login.html");
+  });
+
+  // Delegated (not attached per-render) since renderDriftBanner rebuilds
+  // #drift-banner's innerHTML wholesale on every call.
+  document.getElementById("drift-banner").addEventListener("click", (e) => {
+    const btn = e.target.closest('[data-action="resync-month"]');
+    if (!btn) return;
+    resyncMonth(btn.dataset.month, session.access_token, btn);
   });
 
   document.getElementById("month-prev").addEventListener("click", () => {
