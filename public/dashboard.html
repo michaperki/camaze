@@ -283,6 +283,10 @@
   }
   .stat-card-value.stat-danger { color: var(--danger); }
   .stat-card-value.stat-warning { color: var(--warning); }
+  /* Same status classes budgetStatus() drives on the overall Budget stat
+     card above, reused verbatim on a department row's amount. */
+  .model-amount.stat-danger { color: var(--danger); }
+  .model-amount.stat-warning { color: var(--warning); }
   .stat-card-meta { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
   .stat-card-meta a { color: var(--accent); text-decoration: none; }
   .stat-card-meta a:hover { text-decoration: underline; }
@@ -352,6 +356,8 @@
       <div class="breakdown-tabs" role="tablist">
         <button type="button" class="breakdown-tab active" id="tab-models" data-tab="models" role="tab" aria-selected="true">By model</button>
         <button type="button" class="breakdown-tab" id="tab-attribution" data-tab="attribution" role="tab" aria-selected="false">By project</button>
+        <button type="button" class="breakdown-tab" id="tab-departments" data-tab="departments" role="tab" aria-selected="false">By department</button>
+        <button type="button" class="breakdown-tab" id="tab-people" data-tab="people" role="tab" aria-selected="false" style="display:none">Top spenders</button>
       </div>
       <div class="breakdown-body">
         <div id="models-pane">
@@ -362,6 +368,14 @@
           <div class="stat-label" id="attribution-label">Spend by project</div>
           <div id="attribution-content"></div>
           <p class="section-footnote section-footnote-warning" id="attribution-unpriced-note" style="display:none"></p>
+        </div>
+        <div id="departments-pane" class="pane-hidden">
+          <div class="stat-label" id="departments-label">Spend by department</div>
+          <div id="departments-content"></div>
+        </div>
+        <div id="people-pane" class="pane-hidden">
+          <div class="stat-label" id="people-label">Top spenders</div>
+          <div id="people-content"></div>
         </div>
       </div>
     </div>
@@ -379,6 +393,10 @@ const SERIES_VARS = {
   openai: "var(--series-2)",
   google: "var(--series-3)",
 };
+
+// Matches lib/org.js's UNASSIGNED sentinel — defensive fallback only; every
+// attribution row from api/costs.js already carries a `department` field.
+const UNASSIGNED_DEPT = { id: null, name: "Unassigned" };
 
 // Client-side month selection — { year, month: 1-12 }, all UTC to match
 // how every date in this dashboard is already bucketed. Passed to
@@ -744,35 +762,149 @@ function renderAttribution(attribution) {
   }).join("");
 }
 
-// Shared card for both breakdown tabs — visible whenever either has data,
+// Spend-by-department breakdown, grouped from the same attribution rows
+// the By-project tab already has (see lib/org.js's resolveAttribution) — no
+// separate fetch. Unassigned is just whatever group key `null` collects:
+// never excluded, never merged into another department, sorted by spend
+// like every other row rather than pinned to a fixed position.
+let lastDepartments = [];
+
+function renderDepartmentBreakdown(attribution) {
+  const groups = new Map(); // department id ("unassigned" for null) -> { department, amount_usd }
+  for (const row of attribution || []) {
+    const dept = row.department || UNASSIGNED_DEPT;
+    const key = dept.id ?? "unassigned";
+    if (!groups.has(key)) groups.set(key, { department: dept, amount_usd: 0 });
+    groups.get(key).amount_usd += row.amount_usd;
+  }
+  lastDepartments = [...groups.values()].sort((a, b) => b.amount_usd - a.amount_usd);
+  updateBreakdownCardVisibility();
+
+  const content = document.getElementById("departments-content");
+  if (lastDepartments.length === 0) {
+    content.innerHTML = "";
+    return;
+  }
+
+  const maxAmount = Math.max(...lastDepartments.map(d => d.amount_usd));
+  content.innerHTML = lastDepartments.map((d) => {
+    const isUnassigned = d.department.id === null;
+    // Same zero-amount guard as renderModels — draw no bar for a $0 row.
+    const pct = d.amount_usd > 0 && maxAmount > 0 ? Math.max((d.amount_usd / maxAmount) * 100, 1) : 0;
+    // budgetStatus() is the exact function the overall Budget stat card
+    // uses (see below) — reused here, not reimplemented, against this
+    // department's own monthly_budget_usd instead of the account total.
+    const status = isUnassigned ? null : budgetStatus(d.amount_usd, d.department.monthly_budget_usd);
+    // Unassigned is always drawn in the warning color regardless of budget
+    // (it has none) — an untagged key needs to read as "needs attention,"
+    // not blend in as just another department.
+    const fill = isUnassigned ? "var(--warning)" : (status ? `var(--${status})` : "var(--accent)");
+
+    let perEmployee = "";
+    if (!isUnassigned) {
+      if (d.department.headcount > 0) {
+        perEmployee = `<span class="model-pct">${fmtUSD(d.amount_usd / d.department.headcount)}/person</span>`;
+      } else {
+        perEmployee = `<span class="model-pct" title="Set headcount for this department on the Assignments page to see cost per employee">no headcount</span>`;
+      }
+    }
+    const unassignedBadge = isUnassigned
+      ? `<span class="unpriced-marker" title="Spend from keys/projects with no department or owner set — assign them on the Assignments page">unassigned</span>`
+      : "";
+    const amountClass = "model-amount" + (status ? ` stat-${status}` : "");
+
+    return (
+      '<div class="model-row">' +
+      `<span class="model-label" title="${esc(d.department.name)}">${esc(d.department.name)}</span>` +
+      '<div class="model-bar-track">' +
+      (pct > 0 ? `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` : "") +
+      "</div>" +
+      '<span class="model-stats">' +
+      perEmployee +
+      `<span class="${amountClass}">${fmtUSD(d.amount_usd)}${unassignedBadge}</span>` +
+      "</span>" +
+      "</div>"
+    );
+  }).join("");
+}
+
+// Top spenders, grouped the same way by row.person instead of
+// row.department — only populated from person-level assignments, so a rows
+// with no owner just don't contribute here (they're the Unassigned
+// department's problem, not this list's). The whole tab hides itself when
+// nobody has been assigned as an owner yet, rather than showing an empty
+// leaderboard.
+let lastTopSpenders = [];
+
+function renderTopSpenders(attribution) {
+  const groups = new Map(); // person id -> { person, amount_usd }
+  for (const row of attribution || []) {
+    if (!row.person) continue;
+    const key = row.person.id;
+    if (!groups.has(key)) groups.set(key, { person: row.person, amount_usd: 0 });
+    groups.get(key).amount_usd += row.amount_usd;
+  }
+  lastTopSpenders = [...groups.values()].sort((a, b) => b.amount_usd - a.amount_usd);
+
+  const tab = document.getElementById("tab-people");
+  tab.style.display = lastTopSpenders.length > 0 ? "" : "none";
+  if (lastTopSpenders.length === 0) {
+    document.getElementById("people-content").innerHTML = "";
+    if (breakdownTab === "people") breakdownTab = "models";
+    applyBreakdownTab();
+    return;
+  }
+
+  const maxAmount = Math.max(...lastTopSpenders.map(p => p.amount_usd));
+  document.getElementById("people-content").innerHTML = lastTopSpenders.map((p) => {
+    const pct = p.amount_usd > 0 && maxAmount > 0 ? Math.max((p.amount_usd / maxAmount) * 100, 1) : 0;
+    return (
+      '<div class="model-row">' +
+      `<span class="model-label" title="${esc(p.person.name)}">${esc(p.person.name)}</span>` +
+      '<div class="model-bar-track">' +
+      (pct > 0 ? `<div class="model-bar" style="width:${pct}%;background:var(--accent)"></div>` : "") +
+      "</div>" +
+      '<span class="model-stats">' +
+      `<span class="model-amount">${fmtUSD(p.amount_usd)}</span>` +
+      "</span>" +
+      "</div>"
+    );
+  }).join("");
+  applyBreakdownTab();
+}
+
+// Shared card for all four breakdown tabs — visible whenever any has data,
 // independent of which tab is currently active.
 function updateBreakdownCardVisibility() {
   document.getElementById("breakdown-card").style.display =
     (lastModels.length > 0 || lastAttribution.length > 0) ? "block" : "none";
 }
 
+const BREAKDOWN_TABS = ["models", "attribution", "departments", "people"];
 let breakdownTab = "models";
 
 function applyBreakdownTab() {
-  const isModels = breakdownTab === "models";
-  const tabModels = document.getElementById("tab-models");
-  const tabAttribution = document.getElementById("tab-attribution");
-  tabModels.classList.toggle("active", isModels);
-  tabModels.setAttribute("aria-selected", String(isModels));
-  tabAttribution.classList.toggle("active", !isModels);
-  tabAttribution.setAttribute("aria-selected", String(!isModels));
-  document.getElementById("models-pane").classList.toggle("pane-hidden", !isModels);
-  document.getElementById("attribution-pane").classList.toggle("pane-hidden", isModels);
+  // If the active tab was just hidden (e.g. top spenders lost its last
+  // person-level assignment), fall back to Models rather than leaving
+  // every pane hidden.
+  const activeTabEl = document.getElementById(`tab-${breakdownTab}`);
+  if (!activeTabEl || activeTabEl.style.display === "none") breakdownTab = "models";
+
+  for (const t of BREAKDOWN_TABS) {
+    const isActive = t === breakdownTab;
+    const tabEl = document.getElementById(`tab-${t}`);
+    tabEl.classList.toggle("active", isActive);
+    tabEl.setAttribute("aria-selected", String(isActive));
+    document.getElementById(`${t}-pane`).classList.toggle("pane-hidden", !isActive);
+  }
 }
 
-document.getElementById("tab-models").addEventListener("click", () => {
-  breakdownTab = "models";
-  applyBreakdownTab();
-});
-document.getElementById("tab-attribution").addEventListener("click", () => {
-  breakdownTab = "attribution";
-  applyBreakdownTab();
-});
+for (const t of BREAKDOWN_TABS) {
+  document.getElementById(`tab-${t}`).addEventListener("click", () => {
+    breakdownTab = t;
+    applyBreakdownTab();
+  });
+}
 
 // `total`: the section's true total (lib/costs.js's totals.subscriptions),
 // summed before the >= $0.01 row filter — rows that individually round to
@@ -1033,6 +1165,8 @@ function updateMonthUI() {
   document.getElementById("subtitle").textContent = `AI API spend, daily, ${label} (UTC)`;
   document.getElementById("models-label").textContent = `Spend by model (${label})`;
   document.getElementById("attribution-label").textContent = `Spend by project (${label})`;
+  document.getElementById("departments-label").textContent = `Spend by department (${label})`;
+  document.getElementById("people-label").textContent = `Top spenders (${label})`;
 }
 
 // Fetched-month cache, keyed by "YYYY-MM" — re-selecting a month already
@@ -1061,6 +1195,8 @@ function applyDashboardData(data, accessToken, sel, isCurrentMonth) {
       '<a href="/integrations.html">Go to Integrations</a> to get started.</div>';
     renderModels([]);
     renderAttribution([]);
+    renderDepartmentBreakdown([]);
+    renderTopSpenders([]);
     renderSubscriptions([]);
     renderSummary(null);
     return;
@@ -1068,6 +1204,8 @@ function applyDashboardData(data, accessToken, sel, isCurrentMonth) {
   render(data);
   renderModels(data.models);
   renderAttribution(data.attribution);
+  renderDepartmentBreakdown(data.attribution);
+  renderTopSpenders(data.attribution);
   renderSubscriptions(data.subscriptions, data.totals?.subscriptions);
   renderSummary(data.summary, accessToken, sel, isCurrentMonth, data.from_sync_cache, data.synced_at);
 }
@@ -1077,6 +1215,8 @@ function showLoadError(err) {
     '<div class="message">Could not load cost data: ' + esc(err.message) + "</div>";
   renderModels([]);
   renderAttribution([]);
+  renderDepartmentBreakdown([]);
+  renderTopSpenders([]);
   renderSubscriptions([]);
   renderSummary(null);
 }
