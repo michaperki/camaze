@@ -303,6 +303,18 @@
     margin: 14px 0 0;
   }
   .section-footnote-warning { color: var(--warning); }
+  /* Reconciliation drift (see lib/reconcile.js) — deliberately louder than
+     .note (a plain informational box): this means stored numbers may be
+     wrong, not just "one provider's connection hiccuped." */
+  #drift-banner {
+    font-size: 13px;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 0 0 14px;
+  }
+  #drift-banner strong { font-weight: 600; }
   /* One shared grid for the whole project view (all three provider groups),
      instead of each .model-row being its own independent 3-column grid —
      that's what let column widths drift row to row before, since a fixed
@@ -397,6 +409,7 @@
   </div>
 </header>
 <main>
+  <div id="drift-banner" style="display:none"></div>
   <div id="month-selector">
     <button id="month-prev" type="button" aria-label="Previous month">&larr;</button>
     <span id="month-label"></span>
@@ -879,6 +892,35 @@ function renderSubscriptions(subscriptions, total) {
   ).join("");
 }
 
+// "YYYY-MM" -> "Jul 2026", for reconciliation rows (see lib/reconcile.js),
+// which carry a plain month string rather than the {year,month} shape
+// selectedMonth uses elsewhere.
+function monthStrLabel(monthStr) {
+  const [year, month] = monthStr.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+// Reconciliation (see lib/reconcile.js) compares stored daily_costs against
+// a live fetch and flags 'drift' when they disagree by more than a cent —
+// this is the guard on the whole sync layer, so a drift entry gets a loud,
+// always-visible banner rather than a console warning nobody sees. Not
+// scoped to the currently-viewed month: `reconciliation` is "the most
+// recent check per provider," independent of month navigation.
+function renderDriftBanner(reconciliation) {
+  const banner = document.getElementById("drift-banner");
+  const drifted = (reconciliation || []).filter(r => r.status === "drift");
+  if (drifted.length === 0) {
+    banner.style.display = "none";
+    return;
+  }
+  const items = drifted
+    .map(r => `<strong>${esc(PROVIDER_LABELS[r.provider] || r.provider)}</strong> for ${esc(monthStrLabel(r.month))} (off by ${fmtUSD(Math.abs(r.diff_usd))})`)
+    .join(", ");
+  banner.innerHTML = `⚠ Stored cost data doesn't match what the provider reports: ${items}. ` +
+    `The numbers above may be off until this re-syncs.`;
+  banner.style.display = "block";
+}
+
 const fmtMonthRange = (sel, daysElapsed) => {
   const label = new Date(Date.UTC(sel.year, sel.month - 1, 1))
     .toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
@@ -1025,6 +1067,7 @@ function isMonthCacheFresh(key, entry) {
 }
 
 function applyDashboardData(data, accessToken, sel, isCurrentMonth) {
+  renderDriftBanner(data.reconciliation);
   if (data.no_keys) {
     document.getElementById("content").innerHTML =
       '<div class="message">No providers connected yet. ' +

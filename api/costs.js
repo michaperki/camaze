@@ -6,6 +6,7 @@ const {
   fetchProviderAttribution, buildGoogleAttribution, costDataFromStoredRows,
 } = require("../lib/costs");
 const { getSyncState, getDailyCostRows, getMonthlyAttributionRows, storeSyncResult, syncUserMonth } = require("../lib/costSync");
+const { reconcileUserMonth, latestReconciliationByProvider } = require("../lib/reconcile");
 const timing = require("../lib/timing");
 const { performance } = require("node:perf_hooks");
 
@@ -33,11 +34,16 @@ function currentMonthStr(now) {
 let warmedUp = false;
 
 module.exports = async (req, res) => {
+  // POST /api/costs?action=reconcile&month=YYYY-MM checks stored data
+  // against a live fetch for one month and records the result (see
+  // lib/reconcile.js) — same reasoning as backfill below for why this isn't
+  // its own route: Hobby caps a deployment at 12 serverless functions and
+  // this project was already at that limit. Plain POST (no action, or
+  // action=backfill) keeps its original meaning.
+  if (req.method === "POST" && req.query?.action === "reconcile") return reconcileNow(req, res);
   // POST /api/costs syncs the calling user's last 6 months into Supabase —
-  // this used to be its own api/backfill.js route, folded in here because
-  // Vercel Hobby caps a deployment at 12 serverless functions and this
-  // project was already at that limit. Same file, same auth, entirely
-  // separate code path from the GET read below.
+  // this used to be its own api/backfill.js route, folded in here for the
+  // same reason above.
   if (req.method === "POST") return backfill(req, res);
 
   const handlerStart = performance.now();
@@ -98,13 +104,38 @@ async function backfill(req, res) {
   }
 }
 
+// On-demand version of the cron's reconciliation phase (see
+// api/cron/digest.js's runReconciliation) for one month, for the calling
+// user — e.g. right after noticing drift, without waiting for the next
+// rotation. Same read-only contract as lib/reconcile.js: never touches
+// daily_costs, only compares and records.
+async function reconcileNow(req, res) {
+  const user = await verifyUser(req.headers.authorization).catch(() => null);
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const month = typeof req.query?.month === "string" && MONTH_RE.test(req.query.month) ? req.query.month : null;
+  if (!month) {
+    res.status(400).json({ error: "?month=YYYY-MM is required" });
+    return;
+  }
+
+  try {
+    const result = await reconcileUserMonth(user.id, month);
+    res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
 // Folds fixed costs (lib/fixedCosts.js — manual subscriptions/seats, never
 // cached in daily_costs/monthly_attribution, always computed fresh here) and
 // the budget into a cost-data object, whether that cost data came from a
 // live provider fetch or from costDataFromStoredRows(). `syncedAt`/
 // `fromSyncCache` tell the dashboard whether this response came from the
 // Supabase cache (so it can show "as of <time>") or a live fetch.
-function composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, syncedAt, fromSyncCache) {
+function composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, syncedAt, fromSyncCache, reconciliation) {
   return {
     ...costData,
     totals: {
@@ -128,23 +159,29 @@ function composeResponseData(costData, isCurrentMonth, daysInMonth, attribution,
     attribution,
     synced_at: syncedAt,
     from_sync_cache: fromSyncCache,
+    // Most recent known reconciliation status per provider (see
+    // lib/reconcile.js), independent of which month is being viewed — the
+    // dashboard shows a drift banner if any entry is 'drift'. Compact: just
+    // enough to name the month/provider/amount, not the full stored/live
+    // numbers (that's what the on-demand action is for).
+    reconciliation,
   };
 }
 
 // Reconstructs this month's cost data entirely from daily_costs/
 // monthly_attribution — no provider call. Only used once the caller has
 // already confirmed cost_sync_state is usable (see handle() below).
-async function buildDataFromStore(userId, month, configuredProviders, syncState, budget, fixedCosts) {
+async function buildDataFromStore(userId, month, configuredProviders, syncState, budget, fixedCosts, reconciliation) {
   const [dailyRows, attributionRows] = await Promise.all([
     timing.mark("store:daily_costs", () => getDailyCostRows(userId, month)),
     timing.mark("store:monthly_attribution", () => getMonthlyAttributionRows(userId, month)),
   ]);
 
   const rawCostData = costDataFromStoredRows(dailyRows, month, new Date(), configuredProviders, syncState.providersSucceeded);
-  const { dayModels, projects, isCurrentMonth, daysInMonth, ...costData } = rawCostData;
+  const { dayModels, projects, isCurrentMonth, daysInMonth, providerRawUsd, ...costData } = rawCostData;
   const attribution = attributionRows.sort((a, b) => b.amount_usd - a.amount_usd);
 
-  return composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, syncState.synced_at, true);
+  return composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, syncState.synced_at, true, reconciliation);
 }
 
 async function handle(req, res, handlerStart, coldStart, debugTiming) {
@@ -208,6 +245,7 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
         subscriptions: [],
         summary: null,
         attribution: [],
+        reconciliation: [],
         month,
         cached: false,
         cachedAt: new Date(now).toISOString(),
@@ -217,13 +255,25 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
 
     const configuredProviders = Object.keys(overrides);
 
-    // Budget/fixed-costs are user-scoped only (not month-source-dependent),
-    // so they're resolved once up front and reused by whichever cost-data
-    // path below actually runs.
-    const [budget, fixedCosts] = await Promise.all([
+    // Budget/fixed-costs/reconciliation are all user-scoped only (not
+    // month-source-dependent), so they're resolved once up front and reused
+    // by whichever cost-data path below actually runs. Reconciliation status
+    // is independent of which month is being viewed — it's "the last thing
+    // the nightly check found," not scoped to `month` — so it's skipped
+    // entirely for local dev/anonymous requests, same as the tables it reads.
+    const [budget, fixedCosts, reconciliation] = await Promise.all([
       timing.mark("budget", () => resolveBudget(user?.id)),
       timing.mark("fixedCosts", () => resolveFixedCosts(user?.id, month)),
+      timing.mark("reconciliation", () => (!localDevFallback && user?.id
+        ? latestReconciliationByProvider(user.id).catch((e) => {
+          console.warn(`Could not load reconciliation status: ${e.message}`);
+          return [];
+        })
+        : Promise.resolve([]))),
     ]);
+    const reconciliationCompact = reconciliation.map(r => ({
+      month: r.month, provider: r.provider, status: r.status, diff_usd: r.diff_usd, checked_at: r.checked_at,
+    }));
 
     // Supabase-backed read path: a closed month never calls a provider once
     // it has ANY usable sync (it's final, so staleness doesn't matter); the
@@ -239,7 +289,7 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
     const syncIsFresh = syncIsUsable && (now - new Date(syncState.synced_at).getTime()) < SYNC_FRESH_MS;
 
     if (syncIsUsable && (isClosedMonth || syncIsFresh)) {
-      const data = await buildDataFromStore(user.id, month, configuredProviders, syncState, budget, fixedCosts);
+      const data = await buildDataFromStore(user.id, month, configuredProviders, syncState, budget, fixedCosts, reconciliationCompact);
       cache.set(cacheKey, { data, fetchedAt: now });
       finish(200, { ...data, cached: false, cachedAt: new Date(now).toISOString() }, false);
       return;
@@ -265,13 +315,13 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
     // instead of going out under its own key. isCurrentMonth/daysInMonth
     // feed buildSummary but aren't useful to the browser, which already
     // knows which month it asked for.
-    const { dayModels, projects, isCurrentMonth, daysInMonth, ...costData } = rawCostData;
+    const { dayModels, projects, isCurrentMonth, daysInMonth, providerRawUsd, ...costData } = rawCostData;
     // Same combined sort fetchAttribution() used to apply itself — anthropic
     // rows, then openai, then google, all re-sorted by amount descending.
     const googleAttribution = buildGoogleAttribution(projects);
     const attribution = [...providerAttributionResult.attribution, ...googleAttribution].sort((a, b) => b.amount_usd - a.amount_usd);
 
-    const data = composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, new Date(now).toISOString(), false);
+    const data = composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, new Date(now).toISOString(), false, reconciliationCompact);
     cache.set(cacheKey, { data, fetchedAt: now });
     finish(200, { ...data, cached: false, cachedAt: new Date(now).toISOString() }, false);
 

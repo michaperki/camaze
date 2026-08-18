@@ -13,6 +13,7 @@ const { listEnabledDigestUsers, listAlertEnabledUsers, listUsersWithProviderKeys
 const { sendDigestForUser } = require("../../lib/digest");
 const { runAlertChecksForUser } = require("../../lib/alertRunner");
 const { syncUserMonth } = require("../../lib/costSync");
+const { reconcileUserMonth } = require("../../lib/reconcile");
 
 function currentMonthStr(now) {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -56,6 +57,55 @@ async function runCostSync() {
   return { users: userIds.length, jobs: jobs.length, succeeded, failed, errors };
 }
 
+// Picks 1 of the last `count` closed months, rotating by one slot per day —
+// deterministic (no state to persist) and the same for every user on a
+// given day, so over `count` days each closed month gets checked roughly
+// once. Current month excluded: reconciliation only makes sense once a
+// month is final.
+function closedMonthsBack(now, count) {
+  const months = [];
+  for (let i = 1; i <= count; i++) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    months.push(currentMonthStr(d));
+  }
+  return months;
+}
+
+function pickRotatingMonth(now, months) {
+  const dayIndex = Math.floor(now.getTime() / 86400000);
+  return months[dayIndex % months.length];
+}
+
+// Checks one closed month (see pickRotatingMonth) against a live fetch for
+// every connected user — the guard on the whole sync layer (lib/reconcile.js).
+// Deliberately last: it's the least urgent phase (nothing here is visible to
+// a user in real time the way a digest/alert email is), and a slow or
+// failing reconciliation run must never delay those emails going out.
+async function runReconciliation() {
+  const userIds = await listUsersWithProviderKeys();
+  const now = new Date();
+  const month = pickRotatingMonth(now, closedMonthsBack(now, 3));
+
+  const results = await Promise.allSettled(userIds.map(userId => reconcileUserMonth(userId, month)));
+
+  let ok = 0, drift = 0, unchecked = 0, failed = 0;
+  const driftDetails = [];
+  results.forEach((r, i) => {
+    if (r.status !== "fulfilled") {
+      failed++;
+      driftDetails.push({ user_id: userIds[i], month, error: r.reason.message });
+      return;
+    }
+    for (const row of r.value.checked) {
+      if (row.status === "drift") { drift++; driftDetails.push({ user_id: userIds[i], month, provider: row.provider, diff_usd: row.diff_usd }); }
+      else if (row.status === "unchecked") unchecked++;
+      else ok++;
+    }
+  });
+
+  return { month, users: userIds.length, ok, drift, unchecked, failed, driftDetails };
+}
+
 module.exports = async (req, res) => {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
@@ -97,6 +147,15 @@ module.exports = async (req, res) => {
       .map((r, i) => (r.status === "rejected" ? { user_id: alertsDue[i].user_id, error: r.reason.message } : null))
       .filter(Boolean);
 
+    // Last on purpose — see runReconciliation's comment. Digest and alert
+    // emails have already gone out by this point regardless of how long (or
+    // how badly) this phase goes.
+    const reconciliation = await runReconciliation().catch((err) => {
+      console.warn(`Reconciliation phase failed: ${err.message}`);
+      return { month: null, users: 0, ok: 0, drift: 0, unchecked: 0, failed: 0, driftDetails: [{ error: err.message }] };
+    });
+    console.log(JSON.stringify({ event: "reconciliation_cron", ...reconciliation }));
+
     res.status(200).json({
       ok: true,
       costSync,
@@ -104,6 +163,7 @@ module.exports = async (req, res) => {
       sent,
       errors,
       alerts: { checked: alertsDue.length, sent: alertsSent, errors: alertErrors },
+      reconciliation,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
