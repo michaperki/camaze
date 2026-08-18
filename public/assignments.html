@@ -147,6 +147,23 @@ function personOptionsHtml(selectedId) {
   return html;
 }
 
+// Mirrors lib/org.js's resolveDeptAndPerson for the one entity a dropdown
+// change just applied to — department_id wins when set, else it falls back
+// to the chosen person's home department. Lets saveAssignment update
+// state.entities immediately from the response it already has, instead of
+// refetching just to learn what it already knows.
+function resolveLocalDeptPerson(departmentId, personId) {
+  const person = personId ? state.people.find((p) => p.id === personId) || null : null;
+  let department = departmentId ? state.departments.find((d) => d.id === departmentId) || null : null;
+  if (!department && person && person.department_id) {
+    department = state.departments.find((d) => d.id === person.department_id) || null;
+  }
+  return {
+    department: department ? { id: department.id, name: department.name } : { id: null, name: "Unassigned" },
+    person: person ? { id: person.id, name: person.name } : null,
+  };
+}
+
 function entitiesTableHtml() {
   if (state.entities.length === 0) {
     return '<div class="message">No attribution entities yet — connect a provider on <a href="/integrations.html">Integrations</a>.</div>';
@@ -226,8 +243,34 @@ function renderDepartments() {
 }
 function renderPeople() {
   document.getElementById("people-table").innerHTML = peopleTableHtml();
-  // Department dropdowns elsewhere (entity rows) list every department by
-  // name only, unaffected by people — nothing else to re-render here.
+}
+
+// The add-person form's department <select> isn't tied to any row, so
+// nothing else re-renders it as a side effect — it needs its own refresh.
+// Preserves the in-progress choice if it's still a valid department.
+function renderPersonFormDepartmentOptions() {
+  const select = document.querySelector('#person-form select[name="department_id"]');
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = '<option value="">— None —</option>' +
+    state.departments.map((d) => `<option value="${esc(d.id)}"${d.id === current ? " selected" : ""}>${esc(d.name)}</option>`).join("");
+}
+
+// Every place a department's id/name feeds another section's dropdown:
+// entity rows' department select, people rows' department select, and the
+// add-person form's department select. Called after any create/update/
+// delete of a department so those options — and any label text drawn from
+// a department's name — never go stale without a page reload.
+function refreshDepartmentDropdowns() {
+  renderEntities();
+  renderPeople();
+  renderPersonFormDepartmentOptions();
+}
+
+// Every place a person's id/name feeds another section's dropdown: entity
+// rows' owner select. Called after any create/update/delete of a person.
+function refreshPeopleDropdowns() {
+  renderEntities();
 }
 
 function showRowStatus(row, text, cls) {
@@ -254,9 +297,22 @@ async function saveAssignment(row) {
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    row.classList.remove("is-unassigned");
+
+    // Update this entity's cached state from what was just submitted —
+    // department_id/person_id are already known, so this needs no refetch
+    // — so a later full re-render (triggered by a department/person edit
+    // elsewhere) reflects this save instead of reverting to stale data.
+    const resolved = resolveLocalDeptPerson(departmentId, personId);
+    const entity = state.entities.find((e) => e.provider === provider && e.scope === scope && e.id === entityId);
+    if (entity) { entity.department = resolved.department; entity.person = resolved.person; }
+
+    const stillUnassigned = resolved.department.id === null;
+    row.classList.toggle("is-unassigned", stillUnassigned);
     const scopeEl = row.querySelector(".entity-scope");
-    if (scopeEl) scopeEl.innerHTML = esc(SCOPE_LABEL[scope] || scope);
+    if (scopeEl) {
+      scopeEl.innerHTML = esc(SCOPE_LABEL[scope] || scope) +
+        (stillUnassigned ? ' &middot; <span class="unassigned-pill">Unassigned</span>' : "");
+    }
     showRowStatus(row, "Saved", "ok");
   } catch (err) {
     showRowStatus(row, err.message, "error");
@@ -285,6 +341,9 @@ async function saveDepartment(row) {
     if (data.error) throw new Error(data.error);
     const idx = state.departments.findIndex((d) => d.id === id);
     if (idx !== -1) state.departments[idx] = data.department;
+    // Not renderDepartments() itself — this row's own inputs already show
+    // what was just typed, and rebuilding the table would drop focus.
+    refreshDepartmentDropdowns();
     showRowStatus(row, "Saved", "ok");
   } catch (err) {
     showRowStatus(row, err.message, "error");
@@ -309,6 +368,9 @@ async function savePerson(row) {
     if (data.error) throw new Error(data.error);
     const idx = state.people.findIndex((p) => p.id === id);
     if (idx !== -1) state.people[idx] = data.person;
+    // Not renderPeople() itself — this row's own inputs already show what
+    // was just chosen, and rebuilding the table would drop focus.
+    refreshPeopleDropdowns();
     showRowStatus(row, "Saved", "ok");
   } catch (err) {
     showRowStatus(row, err.message, "error");
@@ -346,8 +408,16 @@ function wireDepartments() {
       .then(async (res) => {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
-        state.departments = state.departments.filter((d) => d.id !== btn.dataset.id);
+        const deletedId = btn.dataset.id;
+        state.departments = state.departments.filter((d) => d.id !== deletedId);
+        // Defensive local fallback for anything still pointing at the id we
+        // just removed, so it can't render as a ghost option — the entities
+        // refetch below supplies the authoritative resolution right after.
+        state.people = state.people.map((p) => (p.department_id === deletedId ? { ...p, department_id: null } : p));
+        state.entities = state.entities.map((e) =>
+          e.department.id === deletedId ? { ...e, department: { id: null, name: "Unassigned" } } : e);
         renderDepartments();
+        refreshDepartmentDropdowns();
         await reloadEntities();
         renderEntities();
       })
@@ -386,6 +456,7 @@ function wireDepartments() {
         state.departments.push(data.department);
         state.departments.sort((a, b) => a.name.localeCompare(b.name));
         renderDepartments();
+        refreshDepartmentDropdowns();
         form.reset();
         form.style.display = "none";
       })
@@ -409,8 +480,15 @@ function wirePeople() {
       .then(async (res) => {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
-        state.people = state.people.filter((p) => p.id !== btn.dataset.id);
+        const deletedId = btn.dataset.id;
+        state.people = state.people.filter((p) => p.id !== deletedId);
+        // Defensive local fallback so no row keeps showing a person who no
+        // longer exists — the entities refetch below supplies the
+        // authoritative resolution (a department set only via this
+        // person's fallback needs the server to re-derive it).
+        state.entities = state.entities.map((e) => (e.person && e.person.id === deletedId ? { ...e, person: null } : e));
         renderPeople();
+        refreshPeopleDropdowns();
         await reloadEntities();
         renderEntities();
       })
@@ -448,6 +526,7 @@ function wirePeople() {
         state.people.push(data.person);
         state.people.sort((a, b) => a.name.localeCompare(b.name));
         renderPeople();
+        refreshPeopleDropdowns();
         form.reset();
         form.style.display = "none";
       })
@@ -565,8 +644,7 @@ async function main() {
   renderEntities();
   renderDepartments();
   renderPeople();
-  document.querySelector('#person-form select[name="department_id"]').innerHTML =
-    '<option value="">— None —</option>' + state.departments.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join("");
+  renderPersonFormDepartmentOptions();
 
   wireEntities();
   wireDepartments();
