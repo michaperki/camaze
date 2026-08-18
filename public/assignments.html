@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>camaze — assignments</title>
+<link rel="stylesheet" href="/shared.css">
+<style>
+  section { margin-bottom: 40px; }
+  h2 { font-size: 16px; margin: 0 0 4px; }
+  .section-hint { color: var(--text-secondary); font-size: 13px; margin: 0 0 16px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0 10px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.is-unassigned { background: color-mix(in srgb, var(--warning) 6%, transparent); }
+  .col-actions { text-align: right; white-space: nowrap; }
+  .col-amount { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .provider-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+  .provider-swatch { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+  .entity-name { font-weight: 500; }
+  .entity-scope { display: block; font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .unassigned-pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 20px;
+    color: var(--warning);
+    background: color-mix(in srgb, var(--warning) 14%, transparent);
+  }
+
+  button, input, select {
+    font: inherit;
+    font-size: 13px;
+  }
+  select, input[type="text"], input[type="email"], input[type="number"] {
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-primary);
+  }
+  .row-select { width: 100%; min-width: 130px; }
+  .row-status { font-size: 11px; color: var(--text-muted); margin-left: 6px; }
+  .row-status.ok { color: var(--ok-fg); }
+  .row-status.error { color: var(--danger); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .btn:hover { border-color: var(--text-muted); }
+  .btn:disabled { opacity: 0.6; cursor: default; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-text {
+    background: none;
+    border: none;
+    padding: 4px 2px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    cursor: pointer;
+  }
+  .btn-text:hover { color: var(--danger); text-decoration-color: currentColor; }
+  .btn-text:disabled { opacity: 0.6; cursor: default; }
+
+  .create-card { margin-top: 14px; }
+  form.create-form { display: flex; flex-direction: column; gap: 10px; }
+  .field-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+  form.create-form input, form.create-form select { width: 100%; }
+  .form-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .form-row > div { flex: 1; min-width: 140px; }
+  .form-actions { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+  .form-error { font-size: 13px; color: var(--danger); }
+
+  .inline-input {
+    width: 100%;
+    border: 1px solid transparent;
+    background: transparent;
+    padding: 4px 6px;
+    border-radius: 4px;
+  }
+  .inline-input:hover, .inline-input:focus { border-color: var(--border); background: var(--page); }
+  .col-num { width: 100px; }
+  .col-budget { width: 130px; }
+</style>
+</head>
+<body>
+<header id="app-header"></header>
+<script src="/header.js"></script>
+<main>
+  <p class="subtitle">Map API keys, workspaces, and projects to the department and person spending them</p>
+  <div id="content"><div class="message">Loading&hellip;</div></div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const PROVIDER_META = {
+  anthropic: { label: "Anthropic", swatch: "var(--series-1)" },
+  openai: { label: "OpenAI", swatch: "var(--series-2)" },
+  google: { label: "Google", swatch: "var(--series-3)" },
+};
+const SCOPE_LABEL = { api_key: "API key", workspace: "Workspace", project: "Project" };
+
+const esc = (s) => String(s).replace(/</g, "&lt;");
+const fmtUSD = (v) => Number(v).toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+let authHeaders = null;
+let state = { departments: [], people: [], entities: [], month: null };
+
+function departmentOptionsHtml(selectedId) {
+  let html = `<option value=""${selectedId ? "" : " selected"}>— Unassigned —</option>`;
+  for (const d of state.departments) {
+    html += `<option value="${esc(d.id)}"${d.id === selectedId ? " selected" : ""}>${esc(d.name)}</option>`;
+  }
+  return html;
+}
+
+function personOptionsHtml(selectedId) {
+  let html = `<option value=""${selectedId ? "" : " selected"}>— None —</option>`;
+  for (const p of state.people) {
+    html += `<option value="${esc(p.id)}"${p.id === selectedId ? " selected" : ""}>${esc(p.name)}</option>`;
+  }
+  return html;
+}
+
+function entitiesTableHtml() {
+  if (state.entities.length === 0) {
+    return '<div class="message">No attribution entities yet — connect a provider on <a href="/integrations.html">Integrations</a>.</div>';
+  }
+  const rows = state.entities.map((e) => {
+    const meta = PROVIDER_META[e.provider] || { label: e.provider, swatch: "var(--text-muted)" };
+    const unassigned = e.department.id === null;
+    return `
+      <tr data-provider="${esc(e.provider)}" data-scope="${esc(e.scope)}" data-entity-id="${esc(e.id)}" class="${unassigned ? "is-unassigned" : ""}">
+        <td><span class="provider-pill"><span class="provider-swatch" style="background:${meta.swatch}"></span>${esc(meta.label)}</span></td>
+        <td>
+          <span class="entity-name">${esc(e.name || e.id)}</span>
+          <span class="entity-scope">${esc(SCOPE_LABEL[e.scope] || e.scope)}${unassigned ? ' &middot; <span class="unassigned-pill">Unassigned</span>' : ""}</span>
+        </td>
+        <td class="col-amount">${fmtUSD(e.amount_usd)}</td>
+        <td><select class="row-select" data-role="department">${departmentOptionsHtml(e.department.id)}</select></td>
+        <td><select class="row-select" data-role="person">${personOptionsHtml(e.person ? e.person.id : null)}</select></td>
+        <td class="col-actions"><span class="row-status" data-role="status"></span></td>
+      </tr>`;
+  }).join("");
+  return `
+    <table>
+      <thead>
+        <tr><th>Provider</th><th>Entity</th><th style="text-align:right">This month</th><th>Department</th><th>Owner</th><th></th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function departmentsTableHtml() {
+  if (state.departments.length === 0) {
+    return '<div class="message">No departments yet — add one below.</div>';
+  }
+  const rows = state.departments.map((d) => `
+    <tr data-id="${esc(d.id)}">
+      <td><input class="inline-input" data-role="name" type="text" value="${esc(d.name)}"></td>
+      <td class="col-num"><input class="inline-input" data-role="headcount" type="number" min="0" step="1" value="${d.headcount}"></td>
+      <td class="col-budget"><input class="inline-input" data-role="budget" type="number" min="0" step="1" placeholder="No limit" value="${d.monthly_budget_usd ?? ""}"></td>
+      <td class="col-actions">
+        <span class="row-status" data-role="status"></span>
+        <button class="btn-text" type="button" data-action="delete-department" data-id="${esc(d.id)}">Remove</button>
+      </td>
+    </tr>`).join("");
+  return `
+    <table>
+      <thead><tr><th>Name</th><th>Headcount</th><th>Monthly budget</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function peopleTableHtml() {
+  if (state.people.length === 0) {
+    return '<div class="message">No people yet — add one below.</div>';
+  }
+  const rows = state.people.map((p) => `
+    <tr data-id="${esc(p.id)}">
+      <td><input class="inline-input" data-role="name" type="text" value="${esc(p.name)}"></td>
+      <td><input class="inline-input" data-role="email" type="email" placeholder="—" value="${esc(p.email || "")}"></td>
+      <td><select class="inline-input" data-role="department_id">${departmentOptionsHtml(p.department_id)}</select></td>
+      <td class="col-actions">
+        <span class="row-status" data-role="status"></span>
+        <button class="btn-text" type="button" data-action="delete-person" data-id="${esc(p.id)}">Remove</button>
+      </td>
+    </tr>`).join("");
+  return `
+    <table>
+      <thead><tr><th>Name</th><th>Email</th><th>Department</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function renderEntities() {
+  document.getElementById("entities-table").innerHTML = entitiesTableHtml();
+}
+function renderDepartments() {
+  document.getElementById("departments-table").innerHTML = departmentsTableHtml();
+}
+function renderPeople() {
+  document.getElementById("people-table").innerHTML = peopleTableHtml();
+  // Department dropdowns elsewhere (entity rows) list every department by
+  // name only, unaffected by people — nothing else to re-render here.
+}
+
+function showRowStatus(row, text, cls) {
+  const status = row.querySelector('[data-role="status"]');
+  if (!status) return;
+  status.textContent = text;
+  status.className = `row-status ${cls || ""}`;
+  if (cls === "ok") setTimeout(() => { status.textContent = ""; status.className = "row-status"; }, 1500);
+}
+
+async function saveAssignment(row) {
+  const provider = row.dataset.provider;
+  const scope = row.dataset.scope;
+  const entityId = row.dataset.entityId;
+  const departmentId = row.querySelector('[data-role="department"]').value || null;
+  const personId = row.querySelector('[data-role="person"]').value || null;
+
+  showRowStatus(row, "Saving…");
+  try {
+    const res = await fetch("/api/org?resource=assignments", {
+      method: "POST",
+      headers: { ...authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, scope, entity_id: entityId, department_id: departmentId, person_id: personId }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    row.classList.remove("is-unassigned");
+    const scopeEl = row.querySelector(".entity-scope");
+    if (scopeEl) scopeEl.innerHTML = esc(SCOPE_LABEL[scope] || scope);
+    showRowStatus(row, "Saved", "ok");
+  } catch (err) {
+    showRowStatus(row, err.message, "error");
+  }
+}
+
+async function saveDepartment(row) {
+  const id = row.dataset.id;
+  const name = row.querySelector('[data-role="name"]').value.trim();
+  const headcount = row.querySelector('[data-role="headcount"]').value;
+  const budgetRaw = row.querySelector('[data-role="budget"]').value;
+  if (!name) { showRowStatus(row, "Name is required", "error"); return; }
+
+  showRowStatus(row, "Saving…");
+  try {
+    const res = await fetch("/api/org?resource=departments", {
+      method: "PATCH",
+      headers: { ...authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id, name,
+        headcount: Number(headcount) || 0,
+        monthly_budget_usd: budgetRaw === "" ? null : Number(budgetRaw),
+      }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    const idx = state.departments.findIndex((d) => d.id === id);
+    if (idx !== -1) state.departments[idx] = data.department;
+    showRowStatus(row, "Saved", "ok");
+  } catch (err) {
+    showRowStatus(row, err.message, "error");
+  }
+}
+
+async function savePerson(row) {
+  const id = row.dataset.id;
+  const name = row.querySelector('[data-role="name"]').value.trim();
+  const email = row.querySelector('[data-role="email"]').value.trim();
+  const departmentId = row.querySelector('[data-role="department_id"]').value || null;
+  if (!name) { showRowStatus(row, "Name is required", "error"); return; }
+
+  showRowStatus(row, "Saving…");
+  try {
+    const res = await fetch("/api/org?resource=people", {
+      method: "PATCH",
+      headers: { ...authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ id, name, email: email || null, department_id: departmentId }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    const idx = state.people.findIndex((p) => p.id === id);
+    if (idx !== -1) state.people[idx] = data.person;
+    showRowStatus(row, "Saved", "ok");
+  } catch (err) {
+    showRowStatus(row, err.message, "error");
+  }
+}
+
+async function reloadEntities() {
+  const res = await fetch(`/api/org?resource=entities&month=${encodeURIComponent(state.month)}`, { headers: authHeaders });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  state.entities = data.entities;
+}
+
+function wireEntities() {
+  const content = document.getElementById("entities-table");
+  content.addEventListener("change", (e) => {
+    const select = e.target.closest("select.row-select");
+    if (!select) return;
+    saveAssignment(select.closest("tr"));
+  });
+}
+
+function wireDepartments() {
+  const table = document.getElementById("departments-table");
+  table.addEventListener("change", (e) => {
+    const row = e.target.closest("tr[data-id]");
+    if (row) saveDepartment(row);
+  });
+  table.addEventListener("click", (e) => {
+    const btn = e.target.closest('[data-action="delete-department"]');
+    if (!btn) return;
+    if (!confirm("Remove this department? People and assignments pointed at it will fall back to Unassigned.")) return;
+    btn.disabled = true;
+    fetch(`/api/org?resource=departments&id=${encodeURIComponent(btn.dataset.id)}`, { method: "DELETE", headers: authHeaders })
+      .then(async (res) => {
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        state.departments = state.departments.filter((d) => d.id !== btn.dataset.id);
+        renderDepartments();
+        await reloadEntities();
+        renderEntities();
+      })
+      .catch((err) => {
+        btn.disabled = false;
+        alert(`Could not remove: ${err.message}`);
+      });
+  });
+
+  const toggleBtn = document.getElementById("toggle-department-form");
+  const form = document.getElementById("department-form");
+  toggleBtn.addEventListener("click", () => {
+    form.style.display = form.style.display === "none" ? "flex" : "none";
+  });
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const errorEl = form.querySelector('[data-role="error"]');
+    errorEl.textContent = "";
+    const formData = new FormData(form);
+    const budgetRaw = formData.get("monthly_budget_usd");
+    const body = {
+      name: formData.get("name"),
+      headcount: Number(formData.get("headcount")) || 0,
+      monthly_budget_usd: budgetRaw ? Number(budgetRaw) : null,
+    };
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    fetch("/api/org?resource=departments", {
+      method: "POST",
+      headers: { ...authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        state.departments.push(data.department);
+        state.departments.sort((a, b) => a.name.localeCompare(b.name));
+        renderDepartments();
+        form.reset();
+        form.style.display = "none";
+      })
+      .catch((err) => { errorEl.textContent = err.message; })
+      .finally(() => { submitBtn.disabled = false; });
+  });
+}
+
+function wirePeople() {
+  const table = document.getElementById("people-table");
+  table.addEventListener("change", (e) => {
+    const row = e.target.closest("tr[data-id]");
+    if (row) savePerson(row);
+  });
+  table.addEventListener("click", (e) => {
+    const btn = e.target.closest('[data-action="delete-person"]');
+    if (!btn) return;
+    if (!confirm("Remove this person? Assignments pointed at them will fall back to Unassigned.")) return;
+    btn.disabled = true;
+    fetch(`/api/org?resource=people&id=${encodeURIComponent(btn.dataset.id)}`, { method: "DELETE", headers: authHeaders })
+      .then(async (res) => {
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        state.people = state.people.filter((p) => p.id !== btn.dataset.id);
+        renderPeople();
+        await reloadEntities();
+        renderEntities();
+      })
+      .catch((err) => {
+        btn.disabled = false;
+        alert(`Could not remove: ${err.message}`);
+      });
+  });
+
+  const toggleBtn = document.getElementById("toggle-person-form");
+  const form = document.getElementById("person-form");
+  toggleBtn.addEventListener("click", () => {
+    form.style.display = form.style.display === "none" ? "flex" : "none";
+  });
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const errorEl = form.querySelector('[data-role="error"]');
+    errorEl.textContent = "";
+    const formData = new FormData(form);
+    const body = {
+      name: formData.get("name"),
+      email: formData.get("email") || null,
+      department_id: formData.get("department_id") || null,
+    };
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    fetch("/api/org?resource=people", {
+      method: "POST",
+      headers: { ...authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        state.people.push(data.person);
+        state.people.sort((a, b) => a.name.localeCompare(b.name));
+        renderPeople();
+        form.reset();
+        form.style.display = "none";
+      })
+      .catch((err) => { errorEl.textContent = err.message; })
+      .finally(() => { submitBtn.disabled = false; });
+  });
+}
+
+async function main() {
+  const cfgRes = await fetch("/api/config");
+  const cfg = await cfgRes.json();
+  if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
+    document.getElementById("content").innerHTML =
+      '<div class="message">Auth is not configured (missing SUPABASE_URL/SUPABASE_ANON_KEY).</div>';
+    return;
+  }
+
+  const client = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+  const { data: { session } } = await client.auth.getSession();
+  if (!session) {
+    window.location.replace("/login.html");
+    return;
+  }
+
+  document.getElementById("user-email").textContent = session.user.email ?? "";
+  document.getElementById("header-right").style.visibility = "visible";
+  document.getElementById("signout-btn").addEventListener("click", async () => {
+    await client.auth.signOut();
+    window.location.replace("/login.html");
+  });
+
+  authHeaders = { Authorization: `Bearer ${session.access_token}` };
+
+  const content = document.getElementById("content");
+  content.innerHTML = `
+    <section id="entities-section">
+      <h2>Attribution entities</h2>
+      <p class="section-hint">Every key, workspace, and project spend has been seen from — unassigned ones are highlighted and sorted first.</p>
+      <div id="entities-table"><div class="message">Loading&hellip;</div></div>
+    </section>
+    <section id="departments-section">
+      <h2>Departments</h2>
+      <p class="section-hint">Cost centers spend rolls up to. Edit any field in place — changes save on blur.</p>
+      <div id="departments-table"><div class="message">Loading&hellip;</div></div>
+      <div class="card create-card">
+        <button class="btn" type="button" id="toggle-department-form">Add department</button>
+        <form class="create-form" id="department-form" style="display:none">
+          <div class="form-row">
+            <div>
+              <div class="field-label">Name</div>
+              <input type="text" name="name" placeholder="e.g. Engineering" required>
+            </div>
+            <div>
+              <div class="field-label">Headcount</div>
+              <input type="number" name="headcount" min="0" step="1" value="0">
+            </div>
+            <div>
+              <div class="field-label">Monthly budget (optional)</div>
+              <input type="number" name="monthly_budget_usd" min="0" step="1" placeholder="No limit">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" type="submit">Add</button>
+            <span class="form-error" data-role="error"></span>
+          </div>
+        </form>
+      </div>
+    </section>
+    <section id="people-section">
+      <h2>People</h2>
+      <p class="section-hint">Individual owners spend can be assigned to. Edit any field in place — changes save on blur.</p>
+      <div id="people-table"><div class="message">Loading&hellip;</div></div>
+      <div class="card create-card">
+        <button class="btn" type="button" id="toggle-person-form">Add person</button>
+        <form class="create-form" id="person-form" style="display:none">
+          <div class="form-row">
+            <div>
+              <div class="field-label">Name</div>
+              <input type="text" name="name" placeholder="e.g. Priya Shah" required>
+            </div>
+            <div>
+              <div class="field-label">Email (optional)</div>
+              <input type="email" name="email" placeholder="priya@company.com">
+            </div>
+            <div>
+              <div class="field-label">Department (optional)</div>
+              <select name="department_id"><option value="">— None —</option></select>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" type="submit">Add</button>
+            <span class="form-error" data-role="error"></span>
+          </div>
+        </form>
+      </div>
+    </section>`;
+
+  const now = new Date();
+  state.month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+
+  const [deptRes, peopleRes, entitiesRes] = await Promise.all([
+    fetch("/api/org?resource=departments", { headers: authHeaders }),
+    fetch("/api/org?resource=people", { headers: authHeaders }),
+    fetch(`/api/org?resource=entities&month=${encodeURIComponent(state.month)}`, { headers: authHeaders }),
+  ]);
+  const [deptData, peopleData, entitiesData] = await Promise.all([deptRes.json(), peopleRes.json(), entitiesRes.json()]);
+  if (deptData.error) throw new Error(deptData.error);
+  if (peopleData.error) throw new Error(peopleData.error);
+  if (entitiesData.error) throw new Error(entitiesData.error);
+
+  state.departments = deptData.departments;
+  state.people = peopleData.people;
+  state.entities = entitiesData.entities;
+
+  renderEntities();
+  renderDepartments();
+  renderPeople();
+  document.querySelector('#person-form select[name="department_id"]').innerHTML =
+    '<option value="">— None —</option>' + state.departments.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join("");
+
+  wireEntities();
+  wireDepartments();
+  wirePeople();
+}
+
+main().catch((err) => {
+  document.getElementById("content").innerHTML =
+    '<div class="message">Could not load assignments: ' + esc(err.message) + "</div>";
+});
+</script>
+</body>
+</html>

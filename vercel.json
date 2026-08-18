@@ -16,6 +16,7 @@
     "api/cron/digest.js": { "maxDuration": 300 },
     "api/cron/alerts.js": { "maxDuration": 300 },
     "api/cron/reconcile.js": { "maxDuration": 300 },
-    "api/costs.js": { "maxDuration": 300 }
+    "api/costs.js": { "maxDuration": 300 },
+    "api/org.js": { "maxDuration": 60 }
   }
 }

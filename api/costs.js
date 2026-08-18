@@ -7,6 +7,7 @@ const {
 } = require("../lib/costs");
 const { getSyncState, getDailyCostRows, getMonthlyAttributionRows, storeSyncResult, syncUserMonth } = require("../lib/costSync");
 const { reconcileUserMonth, getReconciliationStatus } = require("../lib/reconcile");
+const { loadOrgData, resolveAttribution } = require("../lib/org");
 const timing = require("../lib/timing");
 const { performance } = require("node:perf_hooks");
 
@@ -218,14 +219,15 @@ function composeResponseData(costData, isCurrentMonth, daysInMonth, attribution,
 // monthly_attribution — no provider call. Only used once the caller has
 // already confirmed cost_sync_state is usable (see handle() below).
 async function buildDataFromStore(userId, month, configuredProviders, syncState, budget, fixedCosts, reconciliation, unverifiable) {
-  const [dailyRows, attributionRows] = await Promise.all([
+  const [dailyRows, attributionRows, orgData] = await Promise.all([
     timing.mark("store:daily_costs", () => getDailyCostRows(userId, month)),
     timing.mark("store:monthly_attribution", () => getMonthlyAttributionRows(userId, month)),
+    timing.mark("org_data", () => loadOrgData(userId)),
   ]);
 
   const rawCostData = costDataFromStoredRows(dailyRows, month, new Date(), configuredProviders, syncState.providersSucceeded);
   const { dayModels, projects, isCurrentMonth, daysInMonth, providerRawUsd, ...costData } = rawCostData;
-  const attribution = attributionRows.sort((a, b) => b.amount_usd - a.amount_usd);
+  const attribution = resolveAttribution(attributionRows, month, orgData).sort((a, b) => b.amount_usd - a.amount_usd);
 
   return composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, syncState.synced_at, true, reconciliation, unverifiable);
 }
@@ -351,12 +353,15 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
     // Anthropic/OpenAI attribution doesn't depend on fetchAllCosts()'s
     // result (only Google's does, via `projects` below), so it starts
     // immediately here instead of waiting for the chart fetch to finish.
-    const [rawCostData, providerAttributionResult] = await Promise.all([
+    const [rawCostData, providerAttributionResult, orgData] = await Promise.all([
       timing.mark("fetchAllCosts", () => fetchAllCosts(overrides, localDevFallback, month)),
       timing.mark("attribution", () => fetchProviderAttribution(overrides, localDevFallback, month).catch((e) => {
         console.warn(`Could not load attribution: ${e.message}`);
         return { attribution: [], errors: {} };
       })),
+      timing.mark("org_data", () => (!localDevFallback && user?.id
+        ? loadOrgData(user.id)
+        : Promise.resolve({ assignments: [], departments: [], people: [] }))),
     ]);
     // dayModels is only needed to sync into daily_costs below — not sent to
     // the browser. projects (Google-only) feeds into attribution below
@@ -367,7 +372,8 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
     // Same combined sort fetchAttribution() used to apply itself — anthropic
     // rows, then openai, then google, all re-sorted by amount descending.
     const googleAttribution = buildGoogleAttribution(projects);
-    const attribution = [...providerAttributionResult.attribution, ...googleAttribution].sort((a, b) => b.amount_usd - a.amount_usd);
+    const rawAttribution = [...providerAttributionResult.attribution, ...googleAttribution];
+    const attribution = resolveAttribution(rawAttribution, month, orgData).sort((a, b) => b.amount_usd - a.amount_usd);
 
     const data = composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, new Date(now).toISOString(), false, reconciliationCompact, unverifiable);
     cache.set(cacheKey, { data, fetchedAt: now });
@@ -383,7 +389,7 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
     if (!localDevFallback && user?.id) {
       await storeSyncResult(user.id, month, {
         configuredProviders, rawCostData,
-        attribution: [...providerAttributionResult.attribution, ...googleAttribution],
+        attribution: rawAttribution,
         attributionErrors: providerAttributionResult.errors,
       }).catch((err) => console.warn(`Could not sync costs for ${user.id} ${month}: ${err.message}`));
     }
