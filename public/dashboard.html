@@ -409,6 +409,7 @@
       <div class="stat-card-value" id="mtd-value">—</div>
       <div class="stat-card-meta" id="mtd-split" style="display:none"></div>
       <div class="stat-card-meta" id="mtd-range"></div>
+      <div class="stat-card-meta" id="mtd-synced" style="display:none"></div>
     </div>
     <div class="stat-card">
       <div class="stat-card-label">Forecast</div>
@@ -928,7 +929,7 @@ function budgetStatus(amount, budget) {
   return null;
 }
 
-function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth) {
+function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth, fromSyncCache, syncedAt) {
   const row = document.getElementById("summary-row");
   if (!summary) {
     row.style.display = "none";
@@ -941,6 +942,18 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth) {
   document.getElementById("mtd-label").textContent = isCurrentMonth ? "Month to Date" : "Total";
   document.getElementById("mtd-value").textContent = fmtUSD(mtd);
   document.getElementById("mtd-range").textContent = fmtMonthRange(selectedMonth, days_elapsed);
+
+  // Data served from the Supabase sync cache (see api/costs.js) can be up
+  // to an hour old for the current month — flagged here so a stale number
+  // is visibly stale rather than silently wrong. Closed months are final,
+  // so this just credits when they were last synced.
+  const syncedEl = document.getElementById("mtd-synced");
+  if (fromSyncCache && syncedAt) {
+    syncedEl.textContent = `synced ${fmtAgo(syncedAt)}`;
+    syncedEl.style.display = "block";
+  } else {
+    syncedEl.style.display = "none";
+  }
 
   // Metered (usage + provider-billed subscriptions) vs. manually-entered
   // fixed costs — only worth a line when there's actually a fixed-cost
@@ -1026,7 +1039,7 @@ function applyDashboardData(data, accessToken, sel, isCurrentMonth) {
   renderModels(data.models);
   renderAttribution(data.attribution);
   renderSubscriptions(data.subscriptions, data.totals?.subscriptions);
-  renderSummary(data.summary, accessToken, sel, isCurrentMonth);
+  renderSummary(data.summary, accessToken, sel, isCurrentMonth, data.from_sync_cache, data.synced_at);
 }
 
 function showLoadError(err) {
