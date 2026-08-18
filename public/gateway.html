@@ -4,119 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>camaze — gateway</title>
+<link rel="stylesheet" href="/shared.css">
 <style>
-  :root {
-    color-scheme: dark light;
-    --page:        #f9f9f7;
-    --surface-1:   #fcfcfb;
-    --text-primary:#0b0b0b;
-    --text-secondary:#52514e;
-    --text-muted:  #898781;
-    --border:      rgba(11,11,11,0.10);
-    --series-1:    #2a78d6;  /* Anthropic */
-    --series-2:    #eb6834;  /* OpenAI */
-    --accent:      #2a78d6;
-    --danger:      #c0392b;
-    --ok-bg:       #e7f5ee;
-    --ok-fg:       #1a7a4c;
-    --code-bg:     #f0efe9;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --page:        #0d0d0d;
-      --surface-1:   #1a1a19;
-      --text-primary:#ffffff;
-      --text-secondary:#c3c2b7;
-      --text-muted:  #898781;
-      --border:      rgba(255,255,255,0.10);
-      --series-1:    #3987e5;
-      --series-2:    #d95926;
-      --accent:      #3987e5;
-      --danger:      #e0655a;
-      --ok-bg:       #113325;
-      --ok-fg:       #4fd18f;
-      --code-bg:     #161615;
-    }
-  }
-  * { box-sizing: border-box; }
-  html { background: var(--page); }
-  body {
-    margin: 0;
-    background: var(--page);
-    color: var(--text-primary);
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  }
-  a { color: inherit; }
-  main { max-width: 960px; margin: 0 auto; padding: 24px 20px 48px; }
-  .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
-  #app-header { border-bottom: 1px solid var(--border); }
-  .header-inner {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 0 20px;
-    height: 56px;
-    display: flex;
-    align-items: center;
-    gap: 28px;
-  }
-  .wordmark {
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--text-primary);
-    text-decoration: none;
-    flex: none;
-    letter-spacing: -0.01em;
-  }
-  .header-right {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 13px;
-    color: var(--text-secondary);
-    flex: none;
-    visibility: hidden;
-  }
-  .header-right button {
-    font: inherit;
-    font-size: 12px;
-    color: var(--text-secondary);
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 4px 10px;
-    cursor: pointer;
-  }
-  .header-right button:hover { color: var(--text-primary); }
-  nav.tabs {
-    display: flex;
-    gap: 16px;
-    font-size: 13px;
-    flex: 1;
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  nav.tabs::-webkit-scrollbar { display: none; }
-  nav.tabs a {
-    color: var(--text-secondary);
-    text-decoration: none;
-    padding: 4px 0;
-    border-bottom: 2px solid transparent;
-    white-space: nowrap;
-  }
-  nav.tabs a:hover { color: var(--text-primary); }
-  nav.tabs a.active {
-    color: var(--text-primary);
-    border-bottom-color: var(--series-1);
-    font-weight: 600;
-  }
-  @media (max-width: 700px) {
-    .header-inner { padding: 0 14px; gap: 14px; }
-    #user-email { display: none; }
-  }
-
-  .message { color: var(--text-secondary); font-size: 14px; padding: 24px 0; }
-
   section { margin-bottom: 40px; }
   h2 { font-size: 16px; margin: 0 0 4px; }
   .section-hint { color: var(--text-secondary); font-size: 13px; margin: 0 0 16px; }
@@ -179,13 +68,9 @@
   .btn-text:hover { color: var(--danger); text-decoration-color: currentColor; }
   .btn-text:disabled { opacity: 0.6; cursor: default; }
 
-  .create-card {
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px 18px;
-    margin-top: 14px;
-  }
+  /* Same visual recipe as .card plus a small top gap under the "Create
+     key" button — .card supplies the rest via "card create-card". */
+  .create-card { margin-top: 14px; }
   form.create-form { display: flex; flex-direction: column; gap: 10px; }
   .field-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
   input[type="text"], select {
@@ -202,13 +87,9 @@
   .form-actions { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
   .form-error { font-size: 13px; color: var(--danger); }
 
-  .reveal-card {
-    background: var(--ok-bg);
-    border: 1px solid var(--ok-fg);
-    border-radius: 10px;
-    padding: 16px 18px;
-    margin-top: 14px;
-  }
+  /* .card's background/border overridden for the "here's your new key"
+     success state; padding/radius still come from the shared .card. */
+  .reveal-card { background: var(--ok-bg); border-color: var(--ok-fg); margin-top: 14px; }
   .reveal-card .field-label { color: var(--ok-fg); }
   .reveal-key {
     display: flex;
@@ -245,21 +126,8 @@
 </style>
 </head>
 <body>
-<header id="app-header">
-  <div class="header-inner">
-    <a class="wordmark" href="/dashboard.html">camaze</a>
-    <nav class="tabs">
-      <a href="/dashboard.html">Dashboard</a>
-      <a href="/integrations.html">Integrations</a>
-      <a href="/notifications.html">Notifications</a>
-      <a href="/gateway.html" class="active">Gateway</a>
-    </nav>
-    <div class="header-right" id="header-right">
-      <span id="user-email"></span>
-      <button id="signout-btn" type="button">Sign out</button>
-    </div>
-  </div>
-</header>
+<header id="app-header"></header>
+<script src="/header.js"></script>
 <main>
   <p class="subtitle">Route your app's Anthropic/OpenAI calls through camaze to attribute cost by workflow</p>
   <div id="content"><div class="message">Loading&hellip;</div></div>
@@ -301,7 +169,7 @@ function keysTableHtml(keys) {
 
 function revealHtml(key) {
   return `
-    <div class="reveal-card" data-role="reveal">
+    <div class="card reveal-card" data-role="reveal">
       <div class="field-label">Your new gateway key</div>
       <div class="reveal-key">
         <code>${esc(key)}</code>
@@ -377,7 +245,7 @@ async function main() {
       <h2>Gateway keys</h2>
       <p class="section-hint">Each key is scoped to one provider and can be revoked at any time.</p>
       <div id="keys-table"><div class="message">Loading&hellip;</div></div>
-      <div class="create-card">
+      <div class="card create-card">
         <button class="btn" type="button" id="toggle-create">Create key</button>
         <form class="create-form" id="create-form" style="display:none">
           <div class="form-row">

@@ -4,121 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>camaze — notifications</title>
+<link rel="stylesheet" href="/shared.css">
 <style>
-  :root {
-    color-scheme: dark light;
-    --page:        #f9f9f7;
-    --surface-1:   #fcfcfb;
-    --text-primary:#0b0b0b;
-    --text-secondary:#52514e;
-    --text-muted:  #898781;
-    --border:      rgba(11,11,11,0.10);
-    --series-1:    #2a78d6;
-    --accent:      #2a78d6;
-    --danger:      #c0392b;
-    --ok-bg:       #e7f5ee;
-    --ok-fg:       #1a7a4c;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --page:        #0d0d0d;
-      --surface-1:   #1a1a19;
-      --text-primary:#ffffff;
-      --text-secondary:#c3c2b7;
-      --text-muted:  #898781;
-      --border:      rgba(255,255,255,0.10);
-      --series-1:    #3987e5;
-      --accent:      #3987e5;
-      --danger:      #e0655a;
-      --ok-bg:       #113325;
-      --ok-fg:       #4fd18f;
-    }
-  }
-  * { box-sizing: border-box; }
-  html { background: var(--page); }
-  body {
-    margin: 0;
-    background: var(--page);
-    color: var(--text-primary);
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  }
-  main { max-width: 960px; margin: 0 auto; padding: 24px 20px 48px; }
-  .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
-  #app-header { border-bottom: 1px solid var(--border); }
-  .header-inner {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 0 20px;
-    height: 56px;
-    display: flex;
-    align-items: center;
-    gap: 28px;
-  }
-  .wordmark {
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--text-primary);
-    text-decoration: none;
-    flex: none;
-    letter-spacing: -0.01em;
-  }
-  .header-right {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 13px;
-    color: var(--text-secondary);
-    flex: none;
-    visibility: hidden;
-  }
-  .header-right button {
-    font: inherit;
-    font-size: 12px;
-    color: var(--text-secondary);
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 4px 10px;
-    cursor: pointer;
-  }
-  .header-right button:hover { color: var(--text-primary); }
-  nav.tabs {
-    display: flex;
-    gap: 16px;
-    font-size: 13px;
-    flex: 1;
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  nav.tabs::-webkit-scrollbar { display: none; }
-  nav.tabs a {
-    color: var(--text-secondary);
-    text-decoration: none;
-    padding: 4px 0;
-    border-bottom: 2px solid transparent;
-    white-space: nowrap;
-  }
-  nav.tabs a:hover { color: var(--text-primary); }
-  nav.tabs a.active {
-    color: var(--text-primary);
-    border-bottom-color: var(--series-1);
-    font-weight: 600;
-  }
-  @media (max-width: 700px) {
-    .header-inner { padding: 0 14px; gap: 14px; }
-    #user-email { display: none; }
-  }
-
-  .message { color: var(--text-secondary); font-size: 14px; padding: 24px 0; }
-
-  .section-card {
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 18px 20px;
-    margin-bottom: 14px;
-  }
+  /* Same visual recipe as .card plus list spacing between sections —
+     .card supplies the rest via "card section-card". */
+  .section-card { margin-bottom: 14px; }
   .section-title { font-size: 15px; font-weight: 600; }
   .section-desc { font-size: 13px; color: var(--text-secondary); margin: 3px 0 14px; }
 
@@ -233,21 +123,8 @@
 </style>
 </head>
 <body>
-<header id="app-header">
-  <div class="header-inner">
-    <a class="wordmark" href="/dashboard.html">camaze</a>
-    <nav class="tabs">
-      <a href="/dashboard.html">Dashboard</a>
-      <a href="/integrations.html">Integrations</a>
-      <a href="/notifications.html" class="active">Notifications</a>
-      <a href="/gateway.html">Gateway</a>
-    </nav>
-    <div class="header-right" id="header-right">
-      <span id="user-email"></span>
-      <button id="signout-btn" type="button">Sign out</button>
-    </div>
-  </div>
-</header>
+<header id="app-header"></header>
+<script src="/header.js"></script>
 <main>
   <p class="subtitle">Choose how camaze keeps you posted</p>
   <div id="content"><div class="message">Loading&hellip;</div></div>
@@ -270,7 +147,7 @@ function hourOptionsHtml(selected) {
 
 function digestSectionHtml(settings) {
   return `
-    <div class="section-card" id="digest-section">
+    <div class="card section-card" id="digest-section">
       <div class="section-title">Daily Digest</div>
       <p class="section-desc">Receive a daily spend summary by email.</p>
 
@@ -312,7 +189,7 @@ function alertsSectionHtml(settings) {
       </div>`;
 
   return `
-    <div class="section-card" id="alerts-section">
+    <div class="card section-card" id="alerts-section">
       <div class="section-title">Alerts</div>
       <p class="section-desc">Get emailed the moment something looks off &mdash; sent separately from the daily digest.</p>
 

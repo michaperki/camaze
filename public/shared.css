@@ -1,0 +1,143 @@
+/* Design tokens, base reset, and the app-shell components (header/nav,
+   card container) shared by every page under public/. Single source —
+   do not redeclare these in a page's own <style> block. */
+
+:root {
+  color-scheme: dark light;
+  --page:        #f9f9f7;
+  --surface-1:   #fcfcfb;
+  --text-primary:#0b0b0b;
+  --text-secondary:#52514e;
+  --text-muted:  #898781;
+  --grid:        #e1e0d9;
+  --baseline:    #c3c2b7;
+  --border:      rgba(11,11,11,0.10);
+  --danger:      #c0392b;
+  --warning:     #b45309;
+  --ok-bg:       #e7f5ee;
+  --ok-fg:       #1a7a4c;
+  --code-bg:     #f0efe9;
+  --accent:      #2a78d6;
+  --series-1:    var(--accent); /* Anthropic — same blue as the UI accent, by design */
+  --series-2:    #eb6834;       /* OpenAI */
+  --series-3:    #1baf7a;       /* Google */
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page:        #0d0d0d;
+    --surface-1:   #1a1a19;
+    --text-primary:#ffffff;
+    --text-secondary:#c3c2b7;
+    --text-muted:  #898781;
+    --grid:        #2c2c2a;
+    --baseline:    #383835;
+    --border:      rgba(255,255,255,0.10);
+    --danger:      #e0655a;
+    --warning:     #f0b429;
+    --ok-bg:       #113325;
+    --ok-fg:       #4fd18f;
+    --code-bg:     #161615;
+    --accent:      #3987e5;
+    --series-1:    var(--accent);
+    --series-2:    #d95926;
+    --series-3:    #199e70;
+  }
+}
+
+* { box-sizing: border-box; }
+html { background: var(--page); }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+a { color: inherit; }
+
+.message { color: var(--text-secondary); font-size: 14px; padding: 24px 0; }
+.subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+
+main {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}
+
+/* Header/nav — markup is rendered by /header.js into an empty
+   <header id="app-header"></header>; #app-header's fixed height is
+   reserved here so that render doesn't cause a layout jump. */
+#app-header {
+  border-bottom: 1px solid var(--border);
+  height: 57px;
+}
+.header-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 20px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.wordmark {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-decoration: none;
+  flex: none;
+  letter-spacing: -0.01em;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex: none;
+  visibility: hidden;
+}
+.header-right button {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.header-right button:hover { color: var(--text-primary); }
+nav.tabs {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+nav.tabs::-webkit-scrollbar { display: none; }
+nav.tabs a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+nav.tabs a:hover { color: var(--text-primary); }
+nav.tabs a.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+@media (max-width: 700px) {
+  .header-inner { padding: 0 14px; gap: 14px; }
+  #user-email { display: none; }
+}
