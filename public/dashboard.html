@@ -1093,10 +1093,11 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth, from
   document.getElementById("mtd-value").textContent = fmtUSD(mtd);
   document.getElementById("mtd-range").textContent = fmtMonthRange(selectedMonth, days_elapsed);
 
-  // Data served from the Supabase sync cache (see api/costs.js) can be up
-  // to an hour old for the current month — flagged here so a stale number
-  // is visibly stale rather than silently wrong. Closed months are final,
-  // so this just credits when they were last synced.
+  // Data served from the Supabase sync cache (see api/costs.js's
+  // SYNC_FRESH_MS) can be up to ~35 min old for the current month —
+  // flagged here so a stale number is visibly stale rather than silently
+  // wrong. Closed months are final, so this just credits when they were
+  // last synced.
   const syncedEl = document.getElementById("mtd-synced");
   if (fromSyncCache && syncedAt) {
     syncedEl.textContent = `synced ${fmtAgo(syncedAt)}`;

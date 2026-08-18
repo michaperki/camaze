@@ -6,6 +6,15 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "crons": [
-    { "path": "/api/cron/digest", "schedule": "0 9 * * *" }
-  ]
+    { "path": "/api/cron/cost-sync", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/digest", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/alerts", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/reconcile", "schedule": "0 9 * * *" }
+  ],
+  "functions": {
+    "api/cron/cost-sync.js": { "maxDuration": 300 },
+    "api/cron/digest.js": { "maxDuration": 300 },
+    "api/cron/alerts.js": { "maxDuration": 300 },
+    "api/cron/reconcile.js": { "maxDuration": 300 }
+  }
 }

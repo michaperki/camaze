@@ -20,7 +20,13 @@ const cache = new Map(); // cacheKey -> { data, fetchedAt }
 // (still accruing spend) before this falls through to a live fetch. Closed
 // months never re-check this — they're final, so any successful sync at all
 // is good enough forever.
-const SYNC_FRESH_MS = 60 * 60 * 1000;
+//
+// api/cron/cost-sync.js runs every 15 minutes. This is sized to tolerate
+// one missed/failed run — worst case that's ~2 intervals (30 min) between
+// a good sync and the next one landing — plus a few minutes of margin for
+// run duration and cron jitter. Comfortably above one interval, comfortably
+// below an hour.
+const SYNC_FRESH_MS = 35 * 60 * 1000;
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
