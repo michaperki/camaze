@@ -1,7 +1,7 @@
 // camaze — minimal AI spend tracker.
 // Vercel serverless function: proxies each provider's cost API so keys stay server-side.
 const { verifyUser } = require("../lib/supabase");
-const { resolveOverrides, fetchAllCosts, buildSummary, resolveBudget, fetchProviderAttribution, buildGoogleAttribution } = require("../lib/costs");
+const { resolveOverrides, fetchAllCosts, buildSummary, resolveBudget, resolveFixedCosts, fetchProviderAttribution, buildGoogleAttribution } = require("../lib/costs");
 const timing = require("../lib/timing");
 const { performance } = require("node:perf_hooks");
 
@@ -107,14 +107,16 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
     // Anthropic/OpenAI attribution doesn't depend on fetchAllCosts()'s
     // result (only Google's does, via `projects` below), so it starts
     // immediately here instead of waiting for the chart fetch to finish —
-    // all three overlap.
-    const [rawCostData, budget, providerAttribution] = await Promise.all([
+    // all three overlap. fixedCosts (manually-entered subscriptions/seats,
+    // see lib/fixedCosts.js) is user-scoped only, so it overlaps too.
+    const [rawCostData, budget, providerAttribution, fixedCosts] = await Promise.all([
       timing.mark("fetchAllCosts", () => fetchAllCosts(overrides, localDevFallback, month)),
       timing.mark("budget", () => resolveBudget(user?.id)),
       timing.mark("attribution", () => fetchProviderAttribution(overrides, localDevFallback, month).catch((e) => {
         console.warn(`Could not load attribution: ${e.message}`);
         return [];
       })),
+      timing.mark("fixedCosts", () => resolveFixedCosts(user?.id, month)),
     ]);
     // dayModels is only needed for the email digest — not sent to the browser.
     // projects (Google-only, from the same query) feeds into attribution
@@ -125,7 +127,28 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
     // Same combined sort fetchAttribution() used to apply itself — anthropic
     // rows, then openai, then google, all re-sorted by amount descending.
     const attribution = [...providerAttribution, ...buildGoogleAttribution(projects)].sort((a, b) => b.amount_usd - a.amount_usd);
-    const data = { ...costData, summary: buildSummary(costData.days, budget, isCurrentMonth, daysInMonth), attribution };
+    // Fixed costs fold into the month total and the subscriptions list —
+    // never into `days` (they aren't daily spend, and inventing a per-day
+    // slice for a flat subscription would be a lie the chart tells).
+    const data = {
+      ...costData,
+      totals: {
+        ...costData.totals,
+        subscriptions: costData.totals.subscriptions + fixedCosts.total,
+        combined: costData.totals.combined + fixedCosts.total,
+      },
+      subscriptions: [
+        ...costData.subscriptions,
+        ...fixedCosts.rows.map(r => ({
+          provider: null,
+          name: r.seats > 1 ? `${r.label} (×${r.seats})` : r.label,
+          amount_usd: r.amount_usd,
+          manual: true,
+        })),
+      ].sort((a, b) => b.amount_usd - a.amount_usd),
+      summary: buildSummary(costData.days, budget, isCurrentMonth, daysInMonth, fixedCosts.total),
+      attribution,
+    };
     cache.set(cacheKey, { data, fetchedAt: now });
     finish(200, { ...data, cached: false, cachedAt: new Date(now).toISOString() }, false);
   } catch (err) {

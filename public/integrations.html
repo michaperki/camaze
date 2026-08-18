@@ -202,7 +202,7 @@
 
   form.connect-form { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
   .field-label { font-size: 12px; color: var(--text-muted); }
-  input[type="text"], input[type="password"], textarea {
+  input[type="text"], input[type="password"], input[type="number"], input[type="date"], textarea, select {
     width: 100%;
     padding: 8px 10px;
     border-radius: 6px;
@@ -214,6 +214,12 @@
   textarea { min-height: 90px; resize: vertical; font-family: ui-monospace, monospace; font-size: 12px; }
   .form-actions { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
   .form-error { font-size: 13px; color: var(--danger); }
+
+  .section-heading { font-size: 15px; font-weight: 600; margin: 32px 0 4px; }
+  .section-subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 14px; }
+  .row-fields { display: flex; gap: 8px; }
+  .row-fields > div { flex: 1; }
+  .fixed-cost-row-meta { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -235,6 +241,57 @@
 <main>
   <p class="subtitle">Connect your own provider keys — stored encrypted, used only to fetch your spend</p>
   <div id="content"><div class="message">Loading&hellip;</div></div>
+
+  <h2 class="section-heading">Subscriptions &amp; seats</h2>
+  <p class="section-subtitle">Consumer subscriptions and per-seat licenses no provider API reports —
+    Claude Pro, ChatGPT Plus, Copilot seats, Cursor. Counted in full for any month they were active.</p>
+  <div class="provider-card">
+    <div id="fixed-costs-list"><div class="message">Loading&hellip;</div></div>
+    <button class="btn" type="button" id="add-fixed-cost-btn">Add subscription</button>
+    <form class="connect-form" id="fixed-cost-form" style="display:none">
+      <input type="hidden" name="id" value="">
+      <div>
+        <div class="field-label">Vendor</div>
+        <input type="text" name="vendor" placeholder="Anthropic" required>
+      </div>
+      <div>
+        <div class="field-label">Label</div>
+        <input type="text" name="label" placeholder="Claude Pro" required>
+      </div>
+      <div class="row-fields">
+        <div>
+          <div class="field-label">Cost per seat (USD)</div>
+          <input type="number" name="unit_cost_usd" min="0" step="0.01" placeholder="20.00" required>
+        </div>
+        <div>
+          <div class="field-label">Seats</div>
+          <input type="number" name="seats" min="1" step="1" value="1" required>
+        </div>
+        <div>
+          <div class="field-label">Billing</div>
+          <select name="billing_period">
+            <option value="monthly">Monthly</option>
+            <option value="annual">Annual</option>
+          </select>
+        </div>
+      </div>
+      <div class="row-fields">
+        <div>
+          <div class="field-label">Start date</div>
+          <input type="date" name="started_on" required>
+        </div>
+        <div>
+          <div class="field-label">End date (optional)</div>
+          <input type="date" name="ended_on">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Save</button>
+        <button class="btn" type="button" id="cancel-fixed-cost-btn">Cancel</button>
+        <span class="form-error" data-role="fixed-cost-error"></span>
+      </div>
+    </form>
+  </div>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -483,7 +540,135 @@ async function main() {
       });
   });
 
+  // --- Subscriptions & seats (manual fixed costs) ---
+
+  const fmtUSD = (v) => v.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  let lastFixedCosts = [];
+
+  function fixedCostRowHtml(row) {
+    const period = row.billing_period === "annual" ? "/yr" : "/mo";
+    const seatsLabel = row.seats > 1 ? ` × ${row.seats} seats` : "";
+    const endLabel = row.ended_on ? ` · ended ${esc(row.ended_on)}` : "";
+    return `
+      <div class="row" data-fixed-cost-row="${esc(row.id)}">
+        <span>
+          <strong>${esc(row.vendor)}</strong> — ${esc(row.label)}
+          <span class="fixed-cost-row-meta">${fmtUSD(row.unit_cost_usd)}${period}${seatsLabel} · since ${esc(row.started_on)}${endLabel}</span>
+        </span>
+        <span>
+          <button class="btn-text" type="button" data-action="edit-fixed-cost" data-id="${esc(row.id)}">Edit</button>
+          <button class="btn-text" type="button" data-action="delete-fixed-cost" data-id="${esc(row.id)}">Remove</button>
+        </span>
+      </div>`;
+  }
+
+  function renderFixedCosts(rows) {
+    lastFixedCosts = rows;
+    document.getElementById("fixed-costs-list").innerHTML = rows.length
+      ? rows.map(fixedCostRowHtml).join("")
+      : '<p class="message" style="padding:8px 0;">No subscriptions added yet.</p>';
+  }
+
+  async function loadFixedCosts() {
+    const res = await fetch("/api/fixed-costs", { headers: authHeaders });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderFixedCosts(data.fixedCosts || []);
+  }
+
+  const fixedCostForm = document.getElementById("fixed-cost-form");
+
+  function resetFixedCostForm() {
+    fixedCostForm.reset();
+    fixedCostForm.elements.id.value = "";
+    fixedCostForm.querySelector('[data-role="fixed-cost-error"]').textContent = "";
+    fixedCostForm.style.display = "none";
+  }
+
+  function openFixedCostForm(row) {
+    fixedCostForm.reset();
+    fixedCostForm.elements.id.value = row?.id || "";
+    fixedCostForm.elements.vendor.value = row?.vendor || "";
+    fixedCostForm.elements.label.value = row?.label || "";
+    fixedCostForm.elements.unit_cost_usd.value = row?.unit_cost_usd ?? "";
+    fixedCostForm.elements.seats.value = row?.seats ?? 1;
+    fixedCostForm.elements.billing_period.value = row?.billing_period || "monthly";
+    fixedCostForm.elements.started_on.value = row?.started_on || "";
+    fixedCostForm.elements.ended_on.value = row?.ended_on || "";
+    fixedCostForm.style.display = "flex";
+  }
+
+  document.getElementById("add-fixed-cost-btn").addEventListener("click", () => openFixedCostForm(null));
+  document.getElementById("cancel-fixed-cost-btn").addEventListener("click", () => resetFixedCostForm());
+
+  document.getElementById("fixed-costs-list").addEventListener("click", (e) => {
+    const editBtn = e.target.closest('[data-action="edit-fixed-cost"]');
+    if (editBtn) {
+      const row = lastFixedCosts.find(r => String(r.id) === editBtn.dataset.id);
+      if (row) openFixedCostForm(row);
+      return;
+    }
+
+    const deleteBtn = e.target.closest('[data-action="delete-fixed-cost"]');
+    if (deleteBtn) {
+      if (!confirm("Remove this subscription?")) return;
+      deleteBtn.disabled = true;
+      fetch(`/api/fixed-costs?id=${encodeURIComponent(deleteBtn.dataset.id)}`, { method: "DELETE", headers: authHeaders })
+        .then(async (res) => {
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+          sessionStorage.setItem("camaze_keys_changed", "1");
+          return loadFixedCosts();
+        })
+        .catch((err) => {
+          deleteBtn.disabled = false;
+          alert(`Could not remove: ${err.message}`);
+        });
+    }
+  });
+
+  fixedCostForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const errorEl = fixedCostForm.querySelector('[data-role="fixed-cost-error"]');
+    errorEl.textContent = "";
+
+    const formData = new FormData(fixedCostForm);
+    const id = formData.get("id");
+    const body = {
+      vendor: formData.get("vendor"),
+      label: formData.get("label"),
+      unit_cost_usd: Number(formData.get("unit_cost_usd")),
+      seats: Number(formData.get("seats")),
+      billing_period: formData.get("billing_period"),
+      started_on: formData.get("started_on"),
+      ended_on: formData.get("ended_on") || null,
+    };
+
+    const submitBtn = fixedCostForm.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+
+    const req = id
+      ? fetch("/api/fixed-costs", { method: "PATCH", headers: { ...authHeaders, "Content-Type": "application/json" }, body: JSON.stringify({ id, ...body }) })
+      : fetch("/api/fixed-costs", { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+    req
+      .then(async (res) => {
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        sessionStorage.setItem("camaze_keys_changed", "1");
+        resetFixedCostForm();
+        return loadFixedCosts();
+      })
+      .catch((err) => {
+        errorEl.textContent = err.message;
+      })
+      .finally(() => {
+        submitBtn.disabled = false;
+      });
+  });
+
   await loadKeys();
+  await loadFixedCosts();
 }
 
 main().catch((err) => {

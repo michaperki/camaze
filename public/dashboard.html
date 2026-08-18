@@ -289,6 +289,14 @@
     padding: 0 3px;
     margin-left: 2px;
   }
+  .manual-marker {
+    font-size: 10px;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0 3px;
+    margin-left: 6px;
+  }
   .section-footnote {
     font-size: 12px;
     color: var(--text-muted);
@@ -399,6 +407,7 @@
     <div class="stat-card">
       <div class="stat-card-label" id="mtd-label">Month to Date</div>
       <div class="stat-card-value" id="mtd-value">—</div>
+      <div class="stat-card-meta" id="mtd-split" style="display:none"></div>
       <div class="stat-card-meta" id="mtd-range"></div>
     </div>
     <div class="stat-card">
@@ -861,7 +870,9 @@ function renderSubscriptions(subscriptions, total) {
 
   document.getElementById("subscriptions-content").innerHTML = rows.map(s =>
     '<div class="subscription-row">' +
-    `<span class="subscription-name">${esc(s.name)}</span>` +
+    `<span class="subscription-name">${esc(s.name)}` +
+    (s.manual ? `<span class="manual-marker" title="Manually entered on the Integrations page — not reported by a provider API">manual</span>` : "") +
+    "</span>" +
     `<span class="subscription-amount">${fmtUSD(s.amount_usd)}</span>` +
     "</div>"
   ).join("");
@@ -925,11 +936,23 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth) {
   }
   row.style.display = "grid";
 
-  const { mtd, forecast, days_elapsed, budget } = summary;
+  const { mtd, forecast, days_elapsed, budget, usageMtd, subscriptionMtd, fixedCostsMtd } = summary;
 
   document.getElementById("mtd-label").textContent = isCurrentMonth ? "Month to Date" : "Total";
   document.getElementById("mtd-value").textContent = fmtUSD(mtd);
   document.getElementById("mtd-range").textContent = fmtMonthRange(selectedMonth, days_elapsed);
+
+  // Metered (usage + provider-billed subscriptions) vs. manually-entered
+  // fixed costs — only worth a line when there's actually a fixed-cost
+  // component to distinguish from the metered total.
+  const mtdSplitEl = document.getElementById("mtd-split");
+  if (fixedCostsMtd > 0) {
+    const metered = (usageMtd ?? 0) + (subscriptionMtd ?? 0);
+    mtdSplitEl.textContent = `${fmtUSD(metered)} metered · ${fmtUSD(fixedCostsMtd)} fixed`;
+    mtdSplitEl.style.display = "block";
+  } else {
+    mtdSplitEl.style.display = "none";
+  }
 
   // Forecast is null for a past month — it's already over, not a
   // projection. Budget status falls back to the known MTD/total instead.
