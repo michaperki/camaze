@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>camaze — Attribution &amp; cost centers</title>
+<meta name="description" content="camaze maps AI spend to departments and people, down to the individual API request.">
+<link rel="stylesheet" href="/shared.css">
+<style>
+  .dept-mock {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+  }
+  .dept-row {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto auto;
+    align-items: center;
+    gap: 14px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .dept-row:last-child { border-bottom: none; }
+  .dept-name { font-weight: 500; }
+  .dept-hc { color: var(--text-muted); font-size: 12px; }
+  .dept-amount { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+  .mock-caption { font-size: 12px; color: var(--text-muted); text-align: center; margin: 10px 0 0; }
+
+  .gw-code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    overflow-x: auto;
+    white-space: pre;
+  }
+</style>
+</head>
+<body>
+<header id="app-header"></header>
+<script src="/marketing-header.js"></script>
+
+<main class="mkt-main">
+  <section class="mkt-hero">
+    <div class="label-micro">Attribution &amp; cost centers</div>
+    <h1>Every dollar, assigned to a department and a person.</h1>
+    <p class="lede">Billing exports tell you which key spent money. They don't tell you which team it belongs to. camaze closes that gap in two ways — one for the spend you already have, one for the spend as it happens.</p>
+    <a class="btn-primary" href="/login.html">Get started</a>
+  </section>
+
+  <section class="mkt-section">
+    <div class="label-micro">From billing rows to cost centers</div>
+    <h2>Map what you already have</h2>
+    <p class="lede">Every API key, workspace, and project camaze has seen spend from shows up as an attribution entity. Assign each one to a department and, optionally, a person — unassigned entities are highlighted and sorted first, so nothing silently stays unattributed. Departments carry their own headcount and monthly budget, which is what turns raw spend into cost per employee.</p>
+    <div class="dept-mock">
+      <div class="dept-row"><span class="dept-name">Engineering <span class="dept-hc">· 312 people</span></span><span class="dept-amount">$71,200</span></div>
+      <div class="dept-row"><span class="dept-name">Customer Ops <span class="dept-hc">· 184 people</span></span><span class="dept-amount">$55,400</span></div>
+      <div class="dept-row"><span class="dept-name">Product <span class="dept-hc">· 96 people</span></span><span class="dept-amount">$30,100</span></div>
+      <div class="dept-row"><span class="dept-name">Unassigned</span><span class="dept-amount">$4,820</span></div>
+    </div>
+    <p class="mock-caption">Example data — not your account.</p>
+  </section>
+
+  <section class="mkt-section">
+    <div class="label-micro">Attributed Intelligence</div>
+    <h2>Attribute at the request, not just the invoice</h2>
+    <p class="lede">A billing export can only tell you what a key spent in total. camaze's gateway sits in the request path instead: point your app at camaze with a camaze-issued key rather than your provider's, and every call is forwarded to the real provider, streamed back byte for byte, and logged for cost afterward — attribution at the granularity of an individual call, scoped to whichever key made it.</p>
+    <div class="gw-code">POST https://your-app.example.com
+Authorization: Bearer cz-live-...
+
+  ↓ forwarded to api.anthropic.com, streamed back unchanged
+  ↓ cost logged against the gateway key that made the call</div>
+    <p class="lede" style="margin-top:16px">Each gateway key is scoped to one provider and can be revoked at any time — nothing is buffered before it reaches your app, so a slow client only slows itself down.</p>
+  </section>
+
+  <section class="mkt-cta">
+    <h2>Ready to see your own numbers?</h2>
+    <p>Connect Anthropic, OpenAI, or Google in a couple minutes.</p>
+    <a class="btn-primary" href="/login.html">Get started</a>
+  </section>
+</main>
+
+<footer id="site-footer"></footer>
+</body>
+</html>

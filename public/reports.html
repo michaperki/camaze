@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>camaze — Reports</title>
+<meta name="description" content="A daily email digest of yesterday's AI spend, your forecast, and budget usage.">
+<link rel="stylesheet" href="/shared.css">
+<style>
+  .email-mock {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); overflow: hidden;
+  }
+  .email-mock .email-head {
+    padding: 12px 18px; border-bottom: 1px solid var(--border);
+    font-size: 12.5px; color: var(--text-muted);
+  }
+  .email-mock .email-head strong { color: var(--text-primary); font-weight: 600; }
+  .email-mock .email-body { padding: 18px; }
+  .email-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .email-row:last-child { border-bottom: none; }
+  .email-row .em-val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .mock-caption { font-size: 12px; color: var(--text-muted); text-align: center; margin: 10px 0 0; }
+</style>
+</head>
+<body>
+<header id="app-header"></header>
+<script src="/marketing-header.js"></script>
+
+<main class="mkt-main">
+  <section class="mkt-hero">
+    <div class="label-micro">Reports</div>
+    <h1>One email, every morning, with the numbers that matter.</h1>
+    <p class="lede">camaze doesn't wait for someone to open a dashboard. Every morning it sends a digest with yesterday's spend, month-to-date, your forecast, budget usage, and the models driving the bill — delivered, not dug for.</p>
+    <a class="btn-primary" href="/login.html">Get started</a>
+  </section>
+
+  <section class="mkt-section">
+    <div class="label-micro">What's in it</div>
+    <h2>The daily digest</h2>
+    <p class="lede">Turn it on once from Notifications and it arrives every morning without anyone having to remember to check.</p>
+    <div class="email-mock">
+      <div class="email-head">Subject: <strong>camaze — daily spend digest</strong></div>
+      <div class="email-body">
+        <div class="email-row"><span>Yesterday</span><span class="em-val">$28.40</span></div>
+        <div class="email-row"><span>Month to date</span><span class="em-val">$482.10</span></div>
+        <div class="email-row"><span>Forecast (month-end)</span><span class="em-val">$612.40</span></div>
+        <div class="email-row"><span>Budget used</span><span class="em-val">65%</span></div>
+        <div class="email-row"><span>Top model</span><span class="em-val">Claude Sonnet</span></div>
+      </div>
+    </div>
+    <p class="mock-caption">Example data — not your account.</p>
+  </section>
+
+  <section class="mkt-section">
+    <div class="label-micro">Reports vs. alerts</div>
+    <h2>A daily summary, not an incident channel</h2>
+    <p class="lede">The digest is for staying oriented, not for catching a spike as it happens — that's what <a href="/alerts">alerts</a> are for, sent separately and immediately when something looks off. Between the two, you get a steady read on where things stand and an immediate one when they don't.</p>
+  </section>
+
+  <section class="mkt-cta">
+    <h2>Ready to see your own numbers?</h2>
+    <p>Connect Anthropic, OpenAI, or Google in a couple minutes.</p>
+    <a class="btn-primary" href="/login.html">Get started</a>
+  </section>
+</main>
+
+<footer id="site-footer"></footer>
+</body>
+</html>

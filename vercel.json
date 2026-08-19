@@ -3,6 +3,12 @@
   "rewrites": [
     { "source": "/api/gateway/(.*)", "destination": "/api/gateway?rest=$1" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/attribution", "destination": "/attribution.html" },
+    { "source": "/alerts", "destination": "/alerts.html" },
+    { "source": "/planning", "destination": "/planning.html" },
+    { "source": "/reports", "destination": "/reports.html" },
+    { "source": "/integrations", "destination": "/integrations-overview.html" },
+    { "source": "/pricing", "destination": "/pricing.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "crons": [

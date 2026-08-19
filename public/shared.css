@@ -202,7 +202,7 @@ main {
   color: var(--text-secondary);
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 4px 10px;
   cursor: pointer;
 }
@@ -233,4 +233,122 @@ nav.tabs a.active {
 @media (max-width: 700px) {
   .header-inner { padding: 0 14px; gap: 14px; }
   #user-email { display: none; }
+}
+
+/* Marketing site chrome — header/footer rendered by /marketing-header.js
+   into #app-header/#site-footer, plus layout primitives reused across
+   every page under public/{index,attribution,alerts,planning,reports,
+   integrations-overview,pricing}.html. Bespoke illustrative content
+   (mockups, per-page examples) stays local to each page's own <style>
+   block, same convention the app pages already follow. */
+.signin-link {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  flex: none;
+}
+.signin-link:hover { color: var(--text-primary); border-color: var(--text-muted); }
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 11px 26px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+}
+.btn-primary:hover { opacity: 0.92; }
+
+main.mkt-main {
+  max-width: 960px;
+}
+
+.mkt-hero {
+  padding: 56px 0 40px;
+  text-align: center;
+}
+.mkt-hero .label-micro { display: flex; justify-content: center; margin-bottom: 14px; }
+.mkt-hero h1 {
+  font-size: clamp(26px, 5vw, 38px);
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 auto 14px;
+  max-width: 22ch;
+  text-wrap: balance;
+}
+.mkt-hero .lede {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin: 0 auto 28px;
+  max-width: 560px;
+  line-height: 1.55;
+}
+
+.mkt-section { border-top: 1px solid var(--border); padding: 40px 0; }
+.mkt-section > .label-micro { margin-bottom: 10px; }
+.mkt-section h2 {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 10px;
+}
+.mkt-section .lede {
+  font-size: 14.5px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 62ch;
+  margin: 0 0 20px;
+}
+
+.mkt-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+.mkt-grid h3 { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+.mkt-grid p { font-size: 14px; color: var(--text-secondary); margin: 0; line-height: 1.55; }
+
+.mkt-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.mkt-tile {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.mkt-tile:hover { border-color: var(--text-muted); box-shadow: 0 2px 8px -2px rgba(0,0,0,0.06); }
+.mkt-tile .tile-title { font-size: 14px; font-weight: 600; margin-bottom: 5px; }
+.mkt-tile .tile-desc { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
+
+.mkt-cta { border-top: 1px solid var(--border); padding: 48px 0; text-align: center; }
+.mkt-cta h2 { font-size: 22px; font-weight: 700; margin: 0 0 10px; letter-spacing: -0.01em; }
+.mkt-cta p { font-size: 14px; color: var(--text-secondary); margin: 0 0 20px; }
+
+#site-footer { border-top: 1px solid var(--border); }
+.footer-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px 20px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.footer-inner nav { display: flex; gap: 16px; }
+.footer-inner a { color: var(--text-muted); text-decoration: none; }
+.footer-inner a:hover { text-decoration: underline; }
+
+@media (max-width: 700px) {
+  .mkt-grid, .mkt-tiles { grid-template-columns: 1fr; }
 }

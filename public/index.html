@@ -3,178 +3,49 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>camaze — AI API spend, in one place</title>
+<title>camaze — Attributed Intelligence for AI spend</title>
+<meta name="description" content="camaze attributes AI spend to departments, people, and budgets — not just providers and models.">
 <link rel="stylesheet" href="/shared.css">
 <style>
-  * { box-sizing: border-box; }
-  html { background: var(--page); }
-  body {
-    margin: 0;
-    background: var(--page);
-    color: var(--text-primary);
-  }
-  a { color: inherit; }
-
-  #app-header { border-bottom: 1px solid var(--border); }
-  .header-inner {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 0 20px;
-    height: 56px;
-    display: flex;
-    align-items: center;
-    gap: 28px;
-  }
-  .wordmark {
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--text-primary);
-    text-decoration: none;
-    flex: none;
-    letter-spacing: -0.01em;
-  }
-  .header-spacer { flex: 1; }
-  .signin-link {
-    font-size: 13px;
-    color: var(--text-secondary);
-    text-decoration: none;
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 6px 12px;
-  }
-  .signin-link:hover { color: var(--text-primary); border-color: var(--text-muted); }
-
-  main { max-width: 960px; margin: 0 auto; padding: 0 20px; }
-
-  .hero {
-    padding: 56px 0 40px;
-    text-align: center;
-  }
-  .hero h1 {
-    font-size: clamp(26px, 5vw, 38px);
-    line-height: 1.2;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    margin: 0 auto 14px;
-    max-width: 640px;
-  }
-  .hero-sub {
-    font-size: 16px;
-    color: var(--text-secondary);
-    margin: 0 auto 28px;
-    max-width: 520px;
-    line-height: 1.5;
-  }
-  .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 15px;
-    font-weight: 600;
-    text-decoration: none;
-    padding: 11px 26px;
-    border-radius: 8px;
-    background: var(--accent);
-    color: #fff;
-  }
-  .btn-primary:hover { opacity: 0.92; }
-
-  .mock-section { padding: 0 0 56px; }
+  .mock-section { padding: 0 0 8px; }
   .mock-dashboard {
     background: var(--surface-1);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     padding: 20px 20px 16px;
   }
-  .mock-stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    margin-bottom: 18px;
-  }
-  .mock-stat {
-    background: var(--page);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 14px 16px;
-  }
-  .mock-stat-label { font-size: 12px; color: var(--text-secondary); }
+  .mock-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+  .mock-stat { background: var(--page); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; }
+  .mock-stat-label { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
   .mock-stat-value {
-    font-size: 21px;
-    font-weight: 600;
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    margin-top: 2px;
+    font-size: 21px; font-weight: 600; font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums; margin-top: 4px;
   }
   .mock-stat-value.stat-warning { color: var(--warning); }
   .mock-stat-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
   .mock-budget-track { background: var(--grid); border-radius: 3px; height: 6px; margin-top: 9px; }
   .mock-budget-bar { height: 100%; border-radius: 3px; background: var(--warning); }
-
   .mock-legend { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; }
   .mock-legend-item { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
   .mock-legend-swatch { width: 9px; height: 9px; border-radius: 3px; flex: none; }
   #mock-chart svg { display: block; width: 100%; height: auto; }
-  .mock-caption {
-    font-size: 12px;
-    color: var(--text-muted);
-    text-align: center;
-    margin: 12px 0 0;
-  }
+  .mock-caption { font-size: 12px; color: var(--text-muted); text-align: center; margin: 12px 0 0; }
 
-  .features {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
-    padding: 0 0 48px;
-  }
-  .feature h3 { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
-  .feature p { font-size: 14px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+  .keys-note { text-align: center; }
+  .keys-note p { font-size: 13px; color: var(--text-secondary); max-width: 520px; margin: 0 auto; line-height: 1.5; }
 
-  .keys-note {
-    border-top: 1px solid var(--border);
-    padding: 28px 0;
-    text-align: center;
-  }
-  .keys-note p {
-    font-size: 13px;
-    color: var(--text-secondary);
-    max-width: 520px;
-    margin: 0 auto;
-    line-height: 1.5;
-  }
-
-  .site-footer {
-    border-top: 1px solid var(--border);
-    padding: 20px 0 32px;
-    text-align: center;
-    font-size: 12px;
-    color: var(--text-muted);
-  }
-  .site-footer a { color: var(--text-muted); text-decoration: underline; }
-
-  @media (max-width: 700px) {
-    .header-inner { padding: 0 14px; gap: 14px; }
-    main { padding: 0 14px; }
-    .hero { padding: 40px 0 32px; }
-    .mock-stats { grid-template-columns: 1fr; }
-    .features { grid-template-columns: 1fr; gap: 24px; }
-  }
+  @media (max-width: 700px) { .mock-stats { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
-<header id="app-header">
-  <div class="header-inner">
-    <a class="wordmark" href="/">camaze</a>
-    <div class="header-spacer"></div>
-    <a class="signin-link" href="/login.html">Sign in</a>
-  </div>
-</header>
-<main>
-  <section class="hero">
-    <h1>See what you're actually spending on AI APIs.</h1>
-    <p class="hero-sub">camaze pulls daily cost data from Anthropic, OpenAI, and Google into one dashboard, so you're not checking three billing pages to find out what happened.</p>
+<header id="app-header"></header>
+<script src="/marketing-header.js"></script>
+
+<main class="mkt-main">
+  <section class="mkt-hero">
+    <div class="label-micro">Attributed Intelligence</div>
+    <h1>AI spend, attributed to the org chart — not just the API bill.</h1>
+    <p class="lede">Every other AI cost tool is an engineering dashboard with a finance tab bolted on. camaze starts from departments, budgets, and people — the shape finance actually thinks in — and works backward to the API calls.</p>
     <a class="btn-primary" href="/login.html">Get started</a>
   </section>
 
@@ -208,32 +79,50 @@
     <p class="mock-caption">Example data — not your account.</p>
   </section>
 
-  <section class="features">
-    <div class="feature">
-      <h3>All providers, one view</h3>
-      <p>Daily spend across Anthropic, OpenAI, and Google in a single chart — no separate logins or spreadsheets.</p>
-    </div>
-    <div class="feature">
-      <h3>Down to the model</h3>
-      <p>See which model is driving the bill — Claude, GPT, Gemini — not just which provider.</p>
-    </div>
-    <div class="feature">
-      <h3>Budget and forecast</h3>
-      <p>Set a monthly budget. camaze projects where you'll land by month-end based on spend so far.</p>
-    </div>
-    <div class="feature">
-      <h3>Digest and alerts</h3>
-      <p>A daily email with yesterday's spend and your forecast, plus a separate alert if a day spikes or your forecast crosses budget.</p>
+  <section class="mkt-section">
+    <div class="label-micro">What camaze does</div>
+    <h2>Six ways to see where AI spend actually goes</h2>
+    <p class="lede">Each one is a real, working part of the product — not a roadmap.</p>
+    <div class="mkt-tiles">
+      <a class="mkt-tile" href="/attribution">
+        <div class="tile-title">Attribution &amp; cost centers</div>
+        <div class="tile-desc">Map every key, workspace, and project to a department and a person — down to cost per employee.</div>
+      </a>
+      <a class="mkt-tile" href="/alerts">
+        <div class="tile-title">Alerts</div>
+        <div class="tile-desc">Spike detection and budget thresholds, each sent the moment they fire — not buried in a weekly digest.</div>
+      </a>
+      <a class="mkt-tile" href="/planning">
+        <div class="tile-title">Planning</div>
+        <div class="tile-desc">A month-end forecast that treats fixed subscriptions and variable usage as the different things they are.</div>
+      </a>
+      <a class="mkt-tile" href="/reports">
+        <div class="tile-title">Reports</div>
+        <div class="tile-desc">A daily digest with yesterday's spend, your forecast, and budget usage — delivered, not dug for.</div>
+      </a>
+      <a class="mkt-tile" href="/integrations">
+        <div class="tile-title">Integrations</div>
+        <div class="tile-desc">Anthropic, OpenAI, and Google — connected with your own admin keys, encrypted at rest.</div>
+      </a>
+      <a class="mkt-tile" href="/pricing">
+        <div class="tile-title">Pricing</div>
+        <div class="tile-desc">Still taking shape — see where it stands today.</div>
+      </a>
     </div>
   </section>
 
-  <section class="keys-note">
-    <p>Your provider keys are encrypted at rest and used only to read billing data from each provider's API — never to make requests on your behalf.</p>
+  <section class="mkt-section keys-note">
+    <p>Your provider keys are validated before saving and encrypted at rest — never sent back to your browser in full, only a last-4 hint.</p>
+  </section>
+
+  <section class="mkt-cta">
+    <h2>Ready to see your own numbers?</h2>
+    <p>Connect Anthropic, OpenAI, or Google in a couple minutes.</p>
+    <a class="btn-primary" href="/login.html">Get started</a>
   </section>
 </main>
-<footer class="site-footer">
-  camaze · <a href="/login.html">Sign in</a>
-</footer>
+
+<footer id="site-footer"></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>

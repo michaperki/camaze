@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>camaze — Alerts</title>
+<meta name="description" content="Spike detection and budget alerts for AI spend, sent the day something looks off.">
+<link rel="stylesheet" href="/shared.css">
+<style>
+  .mkt-grid.alert-modes { grid-template-columns: 1fr 1fr; }
+  .mode-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+  }
+  .mode-card .label-micro { margin-bottom: 8px; }
+  .mode-card h3 { font-size: 14px; font-weight: 600; margin: 0 0 6px; }
+  .mode-card p { font-size: 13px; color: var(--text-secondary); line-height: 1.55; margin: 0; }
+  .mode-card code {
+    font-family: var(--font-mono); font-size: 12px; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px; color: var(--text-primary);
+  }
+  @media (max-width: 700px) { .mkt-grid.alert-modes { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header id="app-header"></header>
+<script src="/marketing-header.js"></script>
+
+<main class="mkt-main">
+  <section class="mkt-hero">
+    <div class="label-micro">Alerts</div>
+    <h1>Know about a spike the same day it happens.</h1>
+    <p class="lede">A daily digest is useful for context. It's too slow for an incident. camaze runs a separate, same-day check for spend that looks wrong and emails you the moment it fires — not folded into tomorrow's summary.</p>
+    <a class="btn-primary" href="/login.html">Get started</a>
+  </section>
+
+  <section class="mkt-section">
+    <div class="label-micro">Spike detection</div>
+    <h2>Tuned to your own baseline, not a fixed number</h2>
+    <p class="lede">Every day, camaze compares yesterday's usage to your trailing 7-day median — which mode applies depends on how much you'd normally spend on a given day:</p>
+    <div class="mkt-grid alert-modes">
+      <div class="mode-card">
+        <div class="label-micro">When you have a baseline</div>
+        <h3>Ratio mode</h3>
+        <p>Fires when yesterday's usage is at least <code>3×</code> your 7-day median <em>and</em> at least <code>$1</code> — the floor keeps a 20¢-vs-5¢ day from counting as a spike just because the ratio looks dramatic.</p>
+      </div>
+      <div class="mode-card">
+        <div class="label-micro">When a week is quiet</div>
+        <h3>Absolute mode</h3>
+        <p>When your median is near zero, a ratio against it is meaningless — so camaze instead fires on any usage at or above <code>$1</code>. Spend resuming after a quiet stretch is exactly the case worth flagging, not the case to suppress.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="mkt-section">
+    <div class="label-micro">Budget alerts</div>
+    <h2>A warning before the month closes, not after</h2>
+    <p class="lede">Set a monthly budget once, and camaze watches your month-end forecast against it — not just spend so far. When the forecast crosses a threshold you choose (80% by default), you get an email. Budget and spike alerts are sent separately from each other and from the daily digest, so an urgent one never waits behind a routine one.</p>
+  </section>
+
+  <section class="mkt-cta">
+    <h2>Ready to see your own numbers?</h2>
+    <p>Connect Anthropic, OpenAI, or Google in a couple minutes.</p>
+    <a class="btn-primary" href="/login.html">Get started</a>
+  </section>
+</main>
+
+<footer id="site-footer"></footer>
+</body>
+</html>

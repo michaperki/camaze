@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>camaze — Integrations</title>
+<meta name="description" content="Connect Anthropic, OpenAI, and Google — camaze reads your existing billing data directly.">
+<link rel="stylesheet" href="/shared.css">
+<style>
+  .provider-list { display: grid; gap: 12px; }
+  .provider-card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 16px 18px;
+    display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; align-items: baseline;
+  }
+  .provider-card .p-swatch {
+    width: 10px; height: 10px; border-radius: 3px; align-self: center; grid-row: span 2;
+  }
+  .provider-card h3 { font-size: 14px; font-weight: 600; margin: 0; }
+  .provider-card p { font-size: 12.5px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+</style>
+</head>
+<body>
+<header id="app-header"></header>
+<script src="/marketing-header.js"></script>
+
+<main class="mkt-main">
+  <section class="mkt-hero">
+    <div class="label-micro">Integrations</div>
+    <h1>Connect Anthropic, OpenAI, and Google — nothing else required.</h1>
+    <p class="lede">No CSV wrangling, no separate metering layer. camaze reads spend directly from each provider's own billing API using an admin key you connect once.</p>
+    <a class="btn-primary" href="/login.html">Get started</a>
+  </section>
+
+  <section class="mkt-section">
+    <div class="label-micro">Three real integrations, not a generic connector</div>
+    <h2>Each provider, read the way it actually reports cost</h2>
+    <div class="provider-list">
+      <div class="provider-card">
+        <span class="p-swatch" style="background:var(--series-1)"></span>
+        <h3>Anthropic</h3>
+        <p>Read via the Admin API's cost report endpoint — an organization Admin key, not a regular API key.</p>
+      </div>
+      <div class="provider-card">
+        <span class="p-swatch" style="background:var(--series-2)"></span>
+        <h3>OpenAI</h3>
+        <p>Read via the organization Costs API, using an Admin key from your OpenAI organization settings.</p>
+      </div>
+      <div class="provider-card">
+        <span class="p-swatch" style="background:var(--series-3)"></span>
+        <h3>Google</h3>
+        <p>Read from your BigQuery billing export — Google has no cost API, so camaze queries the export table your project already writes to.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="mkt-section">
+    <div class="label-micro">Your keys</div>
+    <h2>Validated, encrypted, never round-tripped</h2>
+    <p class="lede">Each key is checked against the provider's own API before camaze saves it, then encrypted at rest. camaze never sends a saved key back to your browser in full — only a last-4 hint, so you can tell which one is connected without ever seeing it again. Connected keys are what power everything else on this site: cost data, alerts, forecasts, and attribution.</p>
+  </section>
+
+  <section class="mkt-section">
+    <div class="label-micro">Costs no API reports</div>
+    <h2>Fixed subscriptions, entered once</h2>
+    <p class="lede">Some AI spend never shows up in a usage API at all — a flat monthly seat license is the common case. camaze lets you record those directly, and keeps them split from metered usage everywhere: in the chart, in the total, and in the forecast, since a fixed cost can't spike the way usage can.</p>
+  </section>
+
+  <section class="mkt-cta">
+    <h2>Ready to see your own numbers?</h2>
+    <p>Connect Anthropic, OpenAI, or Google in a couple minutes.</p>
+    <a class="btn-primary" href="/login.html">Get started</a>
+  </section>
+</main>
+
+<footer id="site-footer"></footer>
+</body>
+</html>
