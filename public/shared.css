@@ -30,40 +30,51 @@
      hardcoded — they're a different, smaller visual role, not this scale. */
   --radius-sm: 6px;  /* buttons, inputs, notes, tooltips, small controls */
   --radius-lg: 10px; /* cards, stat-cards */
-  --page:        #f9f9f7;
-  --surface-1:   #fcfcfb;
-  --text-primary:#0b0b0b;
-  --text-secondary:#52514e;
-  --text-muted:  #898781;
-  --grid:        #e1e0d9;
-  --baseline:    #c3c2b7;
-  --border:      rgba(11,11,11,0.10);
-  --danger:      #c0392b;
-  --warning:     #b45309;
-  --ok-bg:       #e7f5ee;
-  --ok-fg:       #1a7a4c;
-  --code-bg:     #f0efe9;
-  --accent:      #2a78d6;
+  /* Cool, high-contrast direction distilled from the Lovable export
+     (see the Stage 3 palette-comparison artifact) — pure white ground,
+     flat borders, one saturated blue run through accent/focus/nav.
+     --surface-1 intentionally equals --page: the export separates cards
+     from the page with a border alone, not a background tint. */
+  --page:        #ffffff;
+  --surface-1:   #ffffff;
+  --text-primary:#0b121a;
+  --text-secondary:#333c45;
+  --text-muted:  #606a74;
+  --grid:        #dde2e6;
+  --baseline:    #bfc5ca;
+  --border:      #e4e8ed;
+  --danger:      #ee343b;
+  --warning:     #fa8927;
+  --ok-bg:       #e3f7ea;
+  --ok-fg:       #238049;
+  --code-bg:     #f0f4f7;
+  --accent:      #00a4f4;
   --series-1:    var(--accent); /* Anthropic — same blue as the UI accent, by design */
   --series-2:    #eb6834;       /* OpenAI */
   --series-3:    #1baf7a;       /* Google */
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --page:        #0d0d0d;
-    --surface-1:   #1a1a19;
-    --text-primary:#ffffff;
-    --text-secondary:#c3c2b7;
-    --text-muted:  #898781;
-    --grid:        #2c2c2a;
-    --baseline:    #383835;
-    --border:      rgba(255,255,255,0.10);
-    --danger:      #e0655a;
-    --warning:     #f0b429;
-    --ok-bg:       #113325;
-    --ok-fg:       #4fd18f;
-    --code-bg:     #161615;
-    --accent:      #3987e5;
+    /* Derived, not copied — the export shipped light-only. Built with
+       the same technique our previous dark palette used on its own
+       light values: near-neutral (low-chroma) backgrounds so near-black
+       doesn't turn muddy, and semantic/accent hues lightened rather
+       than inverted. Flagged in the Stage 3 comparison as unverified
+       until seen rendered. */
+    --page:        #050607;
+    --surface-1:   #0e1012;
+    --text-primary:#f3f5f8;
+    --text-secondary:#aeb9c4;
+    --text-muted:  #7d8792;
+    --grid:        #1d2022;
+    --baseline:    #35383c;
+    --border:      rgba(255,255,255,0.12);
+    --danger:      #ff6661;
+    --warning:     #ffa156;
+    --ok-bg:       #0f2418;
+    --ok-fg:       #5ac576;
+    --code-bg:     #080a0d;
+    --accent:      #3db9ff;
     --series-1:    var(--accent);
     --series-2:    #d95926;
     --series-3:    #199e70;
