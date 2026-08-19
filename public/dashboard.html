@@ -22,7 +22,7 @@
     color: var(--text-secondary);
     background: var(--surface-1);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 3px 9px;
     cursor: pointer;
     line-height: 1.4;
@@ -51,7 +51,7 @@
   .legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
   .legend-total { font-weight: 600; color: var(--text-primary); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
   .notes { margin: 0 0 12px; }
-  .note { font-size: 13px; color: var(--text-secondary); padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; }
+  .note { font-size: 13px; color: var(--text-secondary); padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 8px; }
   .message a { color: var(--accent); }
   #chart-wrap { position: relative; }
   svg { display: block; width: 100%; height: auto; }
@@ -62,7 +62,7 @@
     pointer-events: none;
     background: var(--surface-1);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 7px 10px;
     font-size: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.12);
@@ -219,7 +219,7 @@
     font-size: 13px;
     color: var(--danger);
     border: 1px solid var(--danger);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 10px 14px;
     margin: 0 0 14px;
   }
@@ -243,7 +243,7 @@
     font-size: 13px;
     color: var(--warning);
     border: 1px solid var(--warning);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 10px 14px;
     margin: 0 0 14px;
   }
@@ -282,7 +282,7 @@
   .stat-card {
     background: var(--surface-1);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
     padding: 16px 18px;
   }
   .stat-card-label {
@@ -318,7 +318,7 @@
     font: inherit;
     font-size: 13px;
     padding: 6px 8px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     background: var(--page);
     color: var(--text-primary);
@@ -329,7 +329,7 @@
     color: var(--text-primary);
     background: var(--page);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 6px 12px;
     cursor: pointer;
   }

@@ -25,6 +25,11 @@
   color-scheme: dark light;
   --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Only the two radii that are actually reused as component chrome across
+     pages. Pills (20px), swatch dots (2-3px), and bar tracks (3-4px) stay
+     hardcoded — they're a different, smaller visual role, not this scale. */
+  --radius-sm: 6px;  /* buttons, inputs, notes, tooltips, small controls */
+  --radius-lg: 10px; /* cards, stat-cards */
   --page:        #f9f9f7;
   --surface-1:   #fcfcfb;
   --text-primary:#0b0b0b;
@@ -101,8 +106,35 @@ a { color: inherit; }
 .card {
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   padding: 18px 20px;
+}
+
+/* Card-header convention extracted from the Lovable export: title (+
+   optional description) on the left, an optional corner action on the
+   right, separated from the card body by a bottom border. Defined here
+   as a ready-to-use pattern; not yet applied anywhere — see the Stage 2
+   note in the commit this shipped with for why. */
+.panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+}
+.panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.panel-description {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.panel-action {
+  flex: none;
 }
 
 main {
