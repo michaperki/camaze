@@ -2,8 +2,29 @@
    card container) shared by every page under public/. Single source —
    do not redeclare these in a page's own <style> block. */
 
+/* Self-hosted (not Google-linked): one request per font, no third-party
+   dependency, works regardless of network policy. Each file is a
+   variable-weight, Latin-subset woff2 pulled from Google Fonts' own
+   CDN payload — same bytes Google would have served, just served by us. */
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("/fonts/plus-jakarta-sans.woff2") format("woff2");
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono.woff2") format("woff2");
+  font-weight: 400 600;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark light;
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --page:        #f9f9f7;
   --surface-1:   #fcfcfb;
   --text-primary:#0b0b0b;
@@ -50,9 +71,29 @@ body {
   margin: 0;
   background: var(--page);
   color: var(--text-primary);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
 }
 a { color: inherit; }
+
+/* Tabular mono figures for spend amounts, percentages, and other numeric
+   values — apply alongside (or instead of) font-variant-numeric:
+   tabular-nums, which system-ui already gave those elements. */
+.mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum", "zero";
+  font-variant-numeric: tabular-nums;
+}
+
+/* Stage-1 fast-follow candidate: 10px uppercase-tracked micro-label,
+   used on dashboard.html only for now (see stat-label/stat-card-label). */
+.label-micro {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
 
 .message { color: var(--text-secondary); font-size: 14px; padding: 24px 0; }
 .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 24px; }
