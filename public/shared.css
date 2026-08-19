@@ -253,28 +253,110 @@ nav.tabs a.active {
 }
 .signin-link:hover { color: var(--text-primary); border-color: var(--text-muted); }
 
-.btn-primary {
+/* Button system — a base plus color and size modifiers, the hand-written
+   equivalent of the export's cva variant map.
+
+   Scoped under .mkt-main/#site-footer rather than left as a bare .btn:
+   assignments/gateway/integrations/login/notifications.html each already
+   define their own local, differently-shaped .btn/.btn-primary/.btn-text.
+   A bare global .btn here would still visually change those pages —
+   CSS cascades per *property*, so anything this rule sets that a
+   same-specificity local rule doesn't (font-weight, gap, transition)
+   would leak through even though the local rule "wins" on the
+   properties it does set. Scoping avoids that without touching five
+   live app pages in a pass that was supposed to be marketing-only.
+   .btn-outline below is functionally the same bordered button the app
+   pages already define locally — real adoption later means resolving
+   that collision deliberately, not inheriting it by accident now. */
+.mkt-main .btn, #site-footer .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  gap: 6px;
+  font: inherit;
+  font-size: 13px;
   font-weight: 600;
   text-decoration: none;
-  padding: 11px 26px;
+  padding: 8px 16px;
   border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: #fff;
-  border: none;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-primary);
   cursor: pointer;
+  transition: border-color .15s, background-color .15s, color .15s, opacity .15s;
 }
-.btn-primary:hover { opacity: 0.92; }
+.mkt-main .btn:hover { border-color: var(--text-muted); }
+.mkt-main .btn:disabled { opacity: .6; cursor: default; }
+
+.mkt-main .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.mkt-main .btn-primary:hover { opacity: .92; border-color: var(--accent); }
+
+.mkt-main .btn-outline { background: var(--page); border-color: var(--border); color: var(--text-primary); }
+
+.mkt-main .btn-secondary { background: var(--code-bg); border-color: transparent; color: var(--text-primary); }
+.mkt-main .btn-secondary:hover { background: var(--grid); border-color: transparent; }
+
+.mkt-main .btn-ghost { background: transparent; border-color: transparent; color: var(--text-secondary); }
+.mkt-main .btn-ghost:hover { background: var(--code-bg); color: var(--text-primary); border-color: transparent; }
+
+.mkt-main .btn-sm { padding: 5px 11px; font-size: 12px; }
+.mkt-main .btn-lg { padding: 11px 26px; font-size: 15px; }
+.mkt-main .btn-icon { padding: 0; width: 32px; height: 32px; flex: none; }
+.mkt-main .btn-icon.btn-sm { width: 26px; height: 26px; }
+
+/* Badges/chips — small, uppercase, tracked, bordered. The export keeps
+   its base Badge normal-case and only tracks-wider on specific chips
+   (e.g. "FY26 · Q2"); consolidated here into one always-tracked
+   convention rather than porting both variants. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.badge-secondary { background: var(--code-bg); border-color: transparent; color: var(--text-secondary); }
+.badge-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.badge-success { background: color-mix(in srgb, var(--ok-fg) 12%, transparent); border-color: transparent; color: var(--ok-fg); }
+.badge-warning { background: color-mix(in srgb, var(--warning) 14%, transparent); border-color: transparent; color: var(--warning); }
+.badge-danger { background: color-mix(in srgb, var(--danger) 14%, transparent); border-color: transparent; color: var(--danger); }
+
+/* Table treatment — no vertical cell borders, muted uppercase header,
+   row hover. Mirrors what assignments.html already hand-rolls locally
+   (unscoped table/thead th/tbody td selectors there, so no collision
+   with this class-scoped version) — formalized here so any page,
+   marketing or app, can opt in without redefining it. */
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table thead th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 10px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.data-table tbody td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover td { background: var(--code-bg); }
+.data-table .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
 
 main.mkt-main {
   max-width: 960px;
 }
 
 .mkt-hero {
-  padding: 56px 0 40px;
+  padding: 48px 0 32px;
   text-align: center;
 }
 .mkt-hero .label-micro { display: flex; justify-content: center; margin-bottom: 14px; }
@@ -295,7 +377,7 @@ main.mkt-main {
   line-height: 1.55;
 }
 
-.mkt-section { border-top: 1px solid var(--border); padding: 40px 0; }
+.mkt-section { border-top: 1px solid var(--border); padding: 32px 0; }
 .mkt-section > .label-micro { margin-bottom: 10px; }
 .mkt-section h2 {
   font-size: 21px;
@@ -311,7 +393,7 @@ main.mkt-main {
   margin: 0 0 20px;
 }
 
-.mkt-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+.mkt-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 .mkt-grid h3 { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
 .mkt-grid p { font-size: 14px; color: var(--text-secondary); margin: 0; line-height: 1.55; }
 
@@ -327,10 +409,14 @@ main.mkt-main {
   transition: border-color .15s, box-shadow .15s;
 }
 .mkt-tile:hover { border-color: var(--text-muted); box-shadow: 0 2px 8px -2px rgba(0,0,0,0.06); }
-.mkt-tile .tile-title { font-size: 14px; font-weight: 600; margin-bottom: 5px; }
+.mkt-tile .tile-title {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px; font-weight: 600; margin-bottom: 5px;
+}
 .mkt-tile .tile-desc { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
 
-.mkt-cta { border-top: 1px solid var(--border); padding: 48px 0; text-align: center; }
+.mkt-cta { border-top: 1px solid var(--border); padding: 36px 0; text-align: center; }
 .mkt-cta h2 { font-size: 22px; font-weight: 700; margin: 0 0 10px; letter-spacing: -0.01em; }
 .mkt-cta p { font-size: 14px; color: var(--text-secondary); margin: 0 0 20px; }
 

@@ -8,16 +8,9 @@
 <link rel="stylesheet" href="/shared.css">
 <style>
   .provider-list { display: grid; gap: 12px; }
-  .provider-card {
-    background: var(--surface-1); border: 1px solid var(--border);
-    border-radius: var(--radius-lg); padding: 16px 18px;
-    display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; align-items: baseline;
-  }
-  .provider-card .p-swatch {
-    width: 10px; height: 10px; border-radius: 3px; align-self: center; grid-row: span 2;
-  }
-  .provider-card h3 { font-size: 14px; font-weight: 600; margin: 0; }
-  .provider-card p { font-size: 12.5px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+  .provider-title { display: flex; align-items: center; gap: 8px; }
+  .p-swatch { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+  .panel-body p { font-size: 12.5px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -29,27 +22,48 @@
     <div class="label-micro">Integrations</div>
     <h1>Connect Anthropic, OpenAI, and Google — nothing else required.</h1>
     <p class="lede">No CSV wrangling, no separate metering layer. camaze reads spend directly from each provider's own billing API using an admin key you connect once.</p>
-    <a class="btn-primary" href="/login.html">Get started</a>
+    <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
   </section>
 
   <section class="mkt-section">
     <div class="label-micro">Three real integrations, not a generic connector</div>
     <h2>Each provider, read the way it actually reports cost</h2>
     <div class="provider-list">
-      <div class="provider-card">
-        <span class="p-swatch" style="background:var(--series-1)"></span>
-        <h3>Anthropic</h3>
-        <p>Read via the Admin API's cost report endpoint — an organization Admin key, not a regular API key.</p>
+      <div class="card">
+        <div class="panel-header">
+          <div class="provider-title">
+            <span class="p-swatch" style="background:var(--series-1)"></span>
+            <div class="panel-title">Anthropic</div>
+          </div>
+          <div class="panel-action"><span class="badge">Admin API</span></div>
+        </div>
+        <div class="panel-body">
+          <p>Read via the Admin API's cost report endpoint — an organization Admin key, not a regular API key.</p>
+        </div>
       </div>
-      <div class="provider-card">
-        <span class="p-swatch" style="background:var(--series-2)"></span>
-        <h3>OpenAI</h3>
-        <p>Read via the organization Costs API, using an Admin key from your OpenAI organization settings.</p>
+      <div class="card">
+        <div class="panel-header">
+          <div class="provider-title">
+            <span class="p-swatch" style="background:var(--series-2)"></span>
+            <div class="panel-title">OpenAI</div>
+          </div>
+          <div class="panel-action"><span class="badge">Costs API</span></div>
+        </div>
+        <div class="panel-body">
+          <p>Read via the organization Costs API, using an Admin key from your OpenAI organization settings.</p>
+        </div>
       </div>
-      <div class="provider-card">
-        <span class="p-swatch" style="background:var(--series-3)"></span>
-        <h3>Google</h3>
-        <p>Read from your BigQuery billing export — Google has no cost API, so camaze queries the export table your project already writes to.</p>
+      <div class="card">
+        <div class="panel-header">
+          <div class="provider-title">
+            <span class="p-swatch" style="background:var(--series-3)"></span>
+            <div class="panel-title">Google</div>
+          </div>
+          <div class="panel-action"><span class="badge">BigQuery export</span></div>
+        </div>
+        <div class="panel-body">
+          <p>Read from your BigQuery billing export — Google has no cost API, so camaze queries the export table your project already writes to.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -69,7 +83,7 @@
   <section class="mkt-cta">
     <h2>Ready to see your own numbers?</h2>
     <p>Connect Anthropic, OpenAI, or Google in a couple minutes.</p>
-    <a class="btn-primary" href="/login.html">Get started</a>
+    <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
   </section>
 </main>
 

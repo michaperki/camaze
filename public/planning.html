@@ -7,19 +7,14 @@
 <meta name="description" content="camaze forecasts where your AI spend lands by month-end, before the invoice arrives.">
 <link rel="stylesheet" href="/shared.css">
 <style>
-  .split-mock {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-  }
-  .split-card {
-    background: var(--surface-1); border: 1px solid var(--border);
-    border-radius: var(--radius-lg); padding: 16px 18px;
-  }
-  .split-card .label-micro { margin-bottom: 8px; }
-  .split-card .split-value {
+  .split-mock { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .split-mock .card { padding: 16px 18px; }
+  .split-mock .label-micro { margin-bottom: 8px; }
+  .split-value {
     font-family: var(--font-mono); font-variant-numeric: tabular-nums;
     font-size: 19px; font-weight: 600;
   }
-  .split-card p { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin: 8px 0 0; }
+  .split-mock p { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin: 8px 0 0; }
   @media (max-width: 700px) { .split-mock { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -32,7 +27,7 @@
     <div class="label-micro">Planning</div>
     <h1>See where this month lands before it closes.</h1>
     <p class="lede">camaze forecasts your month-end AI spend from what's happened so far this month, colored against the budget you've set — so a forecast that's about to cross the line shows up in yellow or red before it's a surprise on the invoice.</p>
-    <a class="btn-primary" href="/login.html">Get started</a>
+    <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
   </section>
 
   <section class="mkt-section">
@@ -40,12 +35,12 @@
     <h2>Usage and subscriptions, forecast differently</h2>
     <p class="lede">A flat monthly subscription and metered API usage don't behave the same way, so camaze doesn't forecast them the same way. Usage is extrapolated from your run-rate so far this month, since it can spike or slow down. A subscription's daily rate is close to constant, so camaze projects it linearly instead — extrapolating a fixed cost like it might vary would just add noise. The two projections are computed separately, then summed into one month-end number.</p>
     <div class="split-mock">
-      <div class="split-card">
+      <div class="card">
         <div class="label-micro">Usage — extrapolated from run-rate</div>
         <div class="split-value">$540.20</div>
         <p>Scales with how this month is actually trending.</p>
       </div>
-      <div class="split-card">
+      <div class="card">
         <div class="label-micro">Subscriptions — projected linearly</div>
         <div class="split-value">$72.20</div>
         <p>Near-constant by nature, so it's projected as such.</p>
@@ -56,13 +51,18 @@
   <section class="mkt-section">
     <div class="label-micro">Budget-aware</div>
     <h2>Green, yellow, or red — against your number, not a guess</h2>
-    <p class="lede">Set a monthly budget on the dashboard, and the forecast is colored against it: green while you're comfortably under, yellow as you approach it, red once the forecast crosses it. It's the same number the budget alert watches, so what you see on the dashboard and what lands in your inbox never disagree.</p>
+    <p class="lede">Set a monthly budget on the dashboard, and the forecast is colored against it. It's the same number the budget alert watches, so what you see on the dashboard and what lands in your inbox never disagree.</p>
+    <div class="badge-row">
+      <span class="badge badge-success">Comfortably under</span>
+      <span class="badge badge-warning">Approaching budget</span>
+      <span class="badge badge-danger">Forecast over budget</span>
+    </div>
   </section>
 
   <section class="mkt-cta">
     <h2>Ready to see your own numbers?</h2>
     <p>Connect Anthropic, OpenAI, or Google in a couple minutes.</p>
-    <a class="btn-primary" href="/login.html">Get started</a>
+    <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
   </section>
 </main>
 
