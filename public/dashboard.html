@@ -43,7 +43,6 @@
     letter-spacing: 0.06em;
     color: var(--text-muted);
   }
-  .chart-total { font-size: 12px; color: var(--text-secondary); margin: 0 0 10px; }
   .chart-total-amount { color: var(--text-primary); font-weight: 600; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
   .stat-meta { font-size: 12px; color: var(--text-muted); margin: 0 0 8px; }
   .legend { display: flex; gap: 20px; flex-wrap: wrap; margin: 0 0 16px; font-size: 13px; }
@@ -368,7 +367,13 @@
   </div>
   <div class="dashboard-grid">
     <div class="card">
-      <div id="content"><div class="message">Loading cost data&hellip;</div></div>
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Daily Spend</div>
+          <div class="panel-description" id="chart-description"></div>
+        </div>
+      </div>
+      <div class="panel-body" id="content"><div class="message">Loading cost data&hellip;</div></div>
     </div>
     <div class="card" id="breakdown-card" style="display:none">
       <div class="breakdown-tabs" role="tablist">
@@ -468,6 +473,7 @@ function fmtAgo(iso) {
 
 function render({ providers, days, totals, errors, cached, cachedAt }) {
   const content = document.getElementById("content");
+  const description = document.getElementById("chart-description");
   const active = providers.filter(p => !p.failed);
 
   // Per-provider failure notes (shown above the chart, plainly).
@@ -480,6 +486,7 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
   }
 
   if (active.length === 0) {
+    description.textContent = "";
     content.innerHTML = `<div class="notes">${notes}</div>` +
       '<div class="message">No provider data could be loaded.</div>';
     return;
@@ -491,13 +498,13 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
 
   // Bars are usage only (a flat subscription can't spike, so it never
   // belongs in them) — the total line makes the full bill visible anyway,
-  // split out rather than folded silently into one number.
-  const totalLine = totals.subscriptions > 0
+  // split out rather than folded silently into one number. Lives in the
+  // card's panel-description now rather than inline above the chart.
+  description.innerHTML = totals.subscriptions > 0
     ? `<span class="chart-total-amount">${fmtUSD(totals.combined)}</span> total — ${fmtUSD(totals.usage)} usage, ${fmtUSD(totals.subscriptions)} subscriptions`
     : `<span class="chart-total-amount">${fmtUSD(totals.combined)}</span> total`;
 
   const header =
-    '<div class="chart-total">' + totalLine + "</div>" +
     meta +
     '<div class="legend">' +
     active.map(p =>
@@ -1208,6 +1215,7 @@ function applyDashboardData(data, accessToken, sel, isCurrentMonth) {
   renderDriftBanner(data.reconciliation);
   renderUnverifiableBanner(data.unverifiable);
   if (data.no_keys) {
+    document.getElementById("chart-description").textContent = "";
     document.getElementById("content").innerHTML =
       '<div class="message">No providers connected yet. ' +
       '<a href="/integrations.html">Go to Integrations</a> to get started.</div>';
@@ -1229,6 +1237,7 @@ function applyDashboardData(data, accessToken, sel, isCurrentMonth) {
 }
 
 function showLoadError(err) {
+  document.getElementById("chart-description").textContent = "";
   document.getElementById("content").innerHTML =
     '<div class="message">Could not load cost data: ' + esc(err.message) + "</div>";
   renderModels([]);

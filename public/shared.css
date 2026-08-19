@@ -136,6 +136,15 @@ a { color: inherit; }
 .panel-action {
   flex: none;
 }
+/* A card using .panel-header gets its padding from the header row and
+   .panel-body instead of a single uniform inset, so the header's
+   border-bottom can span the full card width. */
+.card:has(> .panel-header) {
+  padding: 0;
+}
+.panel-body {
+  padding: 16px;
+}
 
 main {
   max-width: 1400px;
