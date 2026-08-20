@@ -304,9 +304,9 @@
     <div class="stat-card">
       <div class="stat-card-label" id="mtd-label">Month to Date</div>
       <div class="stat-card-value" id="mtd-value">—</div>
-      <div class="stat-card-meta" id="mtd-split" style="display:none"></div>
+      <div class="stat-card-meta" id="mtd-split" style="visibility:hidden"></div>
       <div class="stat-card-meta" id="mtd-range"></div>
-      <div class="stat-card-meta" id="mtd-synced" style="display:none"></div>
+      <div class="stat-card-meta" id="mtd-synced" style="visibility:hidden"></div>
     </div>
     <div class="stat-card">
       <div class="stat-card-label">Forecast</div>
@@ -1099,12 +1099,19 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth, from
   // flagged here so a stale number is visibly stale rather than silently
   // wrong. Closed months are final, so this just credits when they were
   // last synced.
+  // These two meta lines are conditional per month (synced-cache notice,
+  // metered/fixed split) — toggled with visibility, not display, and
+  // always given placeholder text when absent, so the stat-card's height
+  // (and everything below the summary row) stays put as you page between
+  // months instead of jumping up or down depending on which month you
+  // land on.
   const syncedEl = document.getElementById("mtd-synced");
   if (fromSyncCache && syncedAt) {
     syncedEl.textContent = `synced ${fmtAgo(syncedAt)}`;
-    syncedEl.style.display = "block";
+    syncedEl.style.visibility = "visible";
   } else {
-    syncedEl.style.display = "none";
+    syncedEl.textContent = " ";
+    syncedEl.style.visibility = "hidden";
   }
 
   // Metered (usage + provider-billed subscriptions) vs. manually-entered
@@ -1114,9 +1121,10 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth, from
   if (fixedCostsMtd > 0) {
     const metered = (usageMtd ?? 0) + (subscriptionMtd ?? 0);
     mtdSplitEl.textContent = `${fmtUSD(metered)} metered · ${fmtUSD(fixedCostsMtd)} fixed`;
-    mtdSplitEl.style.display = "block";
+    mtdSplitEl.style.visibility = "visible";
   } else {
-    mtdSplitEl.style.display = "none";
+    mtdSplitEl.textContent = " ";
+    mtdSplitEl.style.visibility = "hidden";
   }
 
   // Forecast is null for a past month — it's already over, not a
