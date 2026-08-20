@@ -45,17 +45,11 @@
   }
   .chart-total-amount { color: var(--text-primary); font-weight: 600; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
   .stat-meta { font-size: 12px; color: var(--text-muted); margin: 0 0 8px; }
-  .legend { display: flex; gap: 20px; flex-wrap: wrap; margin: 0 0 16px; font-size: 13px; }
-  .legend-item { display: flex; align-items: center; gap: 7px; color: var(--text-secondary); }
-  .legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
-  .legend-total { font-weight: 600; color: var(--text-primary); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
   .notes { margin: 0 0 12px; }
   .note { font-size: 13px; color: var(--text-secondary); padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 8px; }
   .message a { color: var(--accent); }
   #chart-wrap { position: relative; }
   svg { display: block; width: 100%; height: auto; }
-  .tick-label, .x-label { font-size: 11px; fill: var(--text-muted); }
-  .tick-label { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
   #tooltip {
     position: absolute;
     pointer-events: none;
@@ -64,6 +58,7 @@
     border-radius: var(--radius-sm);
     padding: 7px 10px;
     font-size: 12px;
+    font-family: var(--font-mono);
     box-shadow: 0 2px 8px rgba(0,0,0,0.12);
     white-space: nowrap;
     display: none;
@@ -504,23 +499,24 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
     ? `<span class="chart-total-amount">${fmtUSD(totals.combined)}</span> total — ${fmtUSD(totals.usage)} usage, ${fmtUSD(totals.subscriptions)} subscriptions`
     : `<span class="chart-total-amount">${fmtUSD(totals.combined)}</span> total`;
 
-  const header =
-    meta +
-    '<div class="legend">' +
+  const legendHtml =
+    '<div class="chart-legend">' +
     active.map(p =>
-      `<span class="legend-item"><span class="legend-swatch" style="background:${SERIES_VARS[p.name]}"></span>` +
-      `${esc(p.label)} <span class="legend-total">${fmtUSD(totals[p.name])}</span></span>`
+      `<span class="chart-legend-item"><span class="chart-legend-swatch" style="background:${SERIES_VARS[p.name]}"></span>` +
+      `${esc(p.label)} <span class="chart-legend-total">${fmtUSD(totals[p.name])}</span></span>`
     ).join("") +
-    "</div>" +
-    (notes ? `<div class="notes">${notes}</div>` : "");
+    "</div>";
+  const topContent = meta + (notes ? `<div class="notes">${notes}</div>` : "");
 
   if (days.every(d => active.every(p => d[p.name] === 0))) {
-    content.innerHTML = header + '<div class="message">No spend recorded in this period.</div>';
+    content.innerHTML = topContent + '<div class="message">No spend recorded in this period.</div>' + legendHtml;
     return;
   }
 
   const W = 920, H = 210;
-  const m = { top: 8, right: 8, bottom: 26, left: 52 };
+  // Extra top margin (was 8) leaves room for the total label floating
+  // above the tallest bar without clipping against the viewBox edge.
+  const m = { top: 22, right: 8, bottom: 26, left: 52 };
   const innerW = W - m.left - m.right;
   const innerH = H - m.top - m.bottom;
   const dayTotal = d => active.reduce((s, p) => s + d[p.name], 0);
@@ -528,29 +524,37 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
   const yMax = ticks[ticks.length - 1];
   const y = v => m.top + innerH - (v / yMax) * innerH;
   const band = innerW / days.length;
-  const barW = Math.min(24, band - 2);          // ≤24px bar, ≥2px gap between bars
+  // Thin bars, wide gaps — the export's columns read as slim marks with
+  // generous whitespace, not the near-touching thick bars this used to
+  // draw. The hover hit-rect below stays full band width regardless.
+  const barW = Math.max(2, Math.min(14, band * 0.42));
   const baseline = m.top + innerH;
   const r = 4;                                   // rounded data-end (top of stack)
   const GAP = 2;                                 // surface gap between stacked segments
+  // Daily bars are too dense to label every one without collisions —
+  // thin to the same every-5th-plus-last cadence the date labels use,
+  // so a total sits directly above its date. Short series (the 12-bar
+  // marketing mock, a partial month) get one on every bar.
+  const labelStride = days.length > 12 ? 5 : 1;
 
   let s = "";
   for (const t of ticks) {
-    s += `<line x1="${m.left}" x2="${W - m.right}" y1="${y(t)}" y2="${y(t)}" stroke="var(--grid)" stroke-width="1"/>`;
-    s += `<text class="tick-label" x="${m.left - 8}" y="${y(t) + 3.5}" text-anchor="end">${t >= 1 ? "$" + t.toLocaleString("en-US") : fmtUSD(t)}</text>`;
+    s += `<line x1="${m.left}" x2="${W - m.right}" y1="${y(t)}" y2="${y(t)}" stroke="var(--grid)" stroke-width="1" stroke-dasharray="2 3"/>`;
+    s += `<text class="chart-tick-label" x="${m.left - 8}" y="${y(t) + 3.5}" text-anchor="end">${t >= 1 ? "$" + t.toLocaleString("en-US") : fmtUSD(t)}</text>`;
   }
 
   // Stacked bars: fixed provider order bottom-up; topmost visible segment gets
   // the rounded cap; a 2px surface gap separates touching segments. The
   // `days` array is zero-filled for the full window (never sparse), so a day
   // with no segments is a measured $0, not a gap in the data — mark it with
-  // a thin baseline tick instead of leaving it blank.
+  // a small muted tick instead of leaving it blank.
   days.forEach((d, i) => {
     const x = m.left + i * band + (band - barW) / 2;
     const segs = active
       .map(p => ({ name: p.name, usd: d[p.name] }))
       .filter(seg => seg.usd > 0);
     if (segs.length === 0) {
-      s += `<rect x="${x}" y="${baseline - 0.5}" width="${barW}" height="1" fill="var(--baseline)"/>`;
+      s += `<rect x="${x}" y="${baseline - 0.5}" width="${barW}" height="1" fill="var(--text-muted)" opacity="0.5"/>`;
       return;
     }
     let cum = 0;
@@ -571,23 +575,28 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
         s += `<rect x="${x}" y="${yTop}" width="${barW}" height="${h}" fill="${fill}"/>`;
       }
     });
+    const total = dayTotal(d);
+    if (total > 0 && (i % labelStride === 0 || i === days.length - 1)) {
+      const cx = x + barW / 2;
+      s += `<text class="chart-bar-total" x="${cx}" y="${y(total) - 6}" text-anchor="middle">$${Math.round(total).toLocaleString("en-US")}</text>`;
+    }
   });
 
-  s += `<line x1="${m.left}" x2="${W - m.right}" y1="${baseline}" y2="${baseline}" stroke="var(--baseline)" stroke-width="1"/>`;
   days.forEach((d, i) => {
-    if (i % 5 !== 0 && i !== days.length - 1) return;
+    if (i % labelStride !== 0 && i !== days.length - 1) return;
     const cx = m.left + i * band + band / 2;
-    s += `<text class="x-label" x="${cx}" y="${H - 8}" text-anchor="middle">${fmtDate(d.date)}</text>`;
+    s += `<text class="chart-x-label" x="${cx}" y="${H - 8}" text-anchor="middle">${fmtDate(d.date)}</text>`;
   });
   // full-band hover targets (bigger than the marks)
   days.forEach((d, i) => {
     s += `<rect data-i="${i}" x="${m.left + i * band}" y="${m.top}" width="${band}" height="${innerH}" fill="transparent"/>`;
   });
 
-  content.innerHTML = header +
+  content.innerHTML = topContent +
     '<div id="chart-wrap">' +
     `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Stacked bar chart of daily AI API spend by provider for ${esc(monthLabel(selectedMonth))}">${s}</svg>` +
-    '<div id="tooltip"></div></div>';
+    '<div id="tooltip"></div></div>' +
+    legendHtml;
 
   const wrap = document.getElementById("chart-wrap");
   const tooltip = document.getElementById("tooltip");
@@ -598,7 +607,7 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
     tooltip.innerHTML =
       `<div class="t-date">${fmtDate(d.date)} &middot; ${fmtUSD(dayTotal(d))}</div>` +
       active.map(p =>
-        `<div class="t-row"><span class="legend-swatch" style="background:${SERIES_VARS[p.name]}"></span>` +
+        `<div class="t-row"><span class="chart-legend-swatch" style="background:${SERIES_VARS[p.name]}"></span>` +
         `${esc(p.label)}<span class="t-value">${fmtUSD(d[p.name])}</span></div>`
       ).join("");
     tooltip.style.display = "block";

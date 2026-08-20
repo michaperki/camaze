@@ -53,12 +53,12 @@
           <div class="mock-stat-meta">65% used</div>
         </div>
       </div>
-      <div class="mock-legend">
-        <span class="mock-legend-item"><span class="mock-legend-swatch" style="background:var(--series-1)"></span>Anthropic</span>
-        <span class="mock-legend-item"><span class="mock-legend-swatch" style="background:var(--series-2)"></span>OpenAI</span>
-        <span class="mock-legend-item"><span class="mock-legend-swatch" style="background:var(--series-3)"></span>Google</span>
-      </div>
       <div id="mock-chart"></div>
+      <div class="chart-legend">
+        <span class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--series-1)"></span>Anthropic</span>
+        <span class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--series-2)"></span>OpenAI</span>
+        <span class="chart-legend-item"><span class="chart-legend-swatch" style="background:var(--series-3)"></span>Google</span>
+      </div>
     </div>
     <p class="mock-caption">Example data — not your account.</p>
   </section>
@@ -113,9 +113,21 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
-// Fixed, made-up numbers — purely decorative, drawn with the same
-// stacked-bar approach as the real dashboard chart (public/dashboard.html)
-// so the mockup actually looks like the product. No data is fetched.
+// Fixed, made-up numbers — drawn with the same Stage 4 chart treatment
+// as the real dashboard chart (public/dashboard.html: thin bars, dashed
+// gridlines, no axis lines, a total above each bar) so the mockup
+// actually looks like the product, not a stand-in shape. No data is
+// fetched.
+function niceTicks(max) {
+  if (max <= 0) return [0, 1];
+  const rough = max / 4;
+  const pow = Math.pow(10, Math.floor(Math.log10(rough)));
+  const step = [1, 2, 5, 10].map(m => m * pow).find(s => s >= rough);
+  const ticks = [];
+  for (let v = 0; v <= max + 1e-9; v += step) ticks.push(v);
+  if (ticks[ticks.length - 1] < max) ticks.push(ticks.length * step);
+  return ticks;
+}
 function renderMockChart() {
   const data = [
     { a: 9, o: 4, g: 2 }, { a: 6, o: 7, g: 1 }, { a: 14, o: 3, g: 3 }, { a: 8, o: 9, g: 2 },
@@ -123,19 +135,24 @@ function renderMockChart() {
     { a: 13, o: 10, g: 5 }, { a: 10, o: 6, g: 2 }, { a: 18, o: 7, g: 3 }, { a: 12, o: 9, g: 4 },
   ];
   const W = 480, H = 170;
-  const m = { top: 8, right: 4, bottom: 8, left: 4 };
+  const m = { top: 20, right: 8, bottom: 8, left: 32 };
   const innerW = W - m.left - m.right;
   const innerH = H - m.top - m.bottom;
   const totals = data.map(d => d.a + d.o + d.g);
-  const yMax = Math.max(...totals) * 1.15;
+  const ticks = niceTicks(Math.max(...totals));
+  const yMax = ticks[ticks.length - 1];
   const y = (v) => m.top + innerH - (v / yMax) * innerH;
   const band = innerW / data.length;
-  const barW = Math.min(24, band - 8);
-  const baseline = m.top + innerH;
+  const barW = Math.max(2, Math.min(14, band * 0.42));
   const r = 4, GAP = 2;
   const colors = { a: "var(--series-1)", o: "var(--series-2)", g: "var(--series-3)" };
 
   let s = "";
+  for (const t of ticks) {
+    s += `<line x1="${m.left}" x2="${W - m.right}" y1="${y(t)}" y2="${y(t)}" stroke="var(--grid)" stroke-width="1" stroke-dasharray="2 3"/>`;
+    s += `<text class="chart-tick-label" x="${m.left - 6}" y="${y(t) + 3.5}" text-anchor="end">$${t}</text>`;
+  }
+
   data.forEach((d, i) => {
     const x = m.left + i * band + (band - barW) / 2;
     const segs = [["a", d.a], ["o", d.o], ["g", d.g]].filter(([, v]) => v > 0);
@@ -157,8 +174,9 @@ function renderMockChart() {
         s += `<rect x="${x}" y="${yTop}" width="${barW}" height="${h}" fill="${fill}"/>`;
       }
     });
+    const total = d.a + d.o + d.g;
+    s += `<text class="chart-bar-total" x="${x + barW / 2}" y="${y(total) - 6}" text-anchor="middle">$${total}</text>`;
   });
-  s += `<line x1="${m.left}" x2="${W - m.right}" y1="${baseline}" y2="${baseline}" stroke="var(--baseline)" stroke-width="1"/>`;
 
   document.getElementById("mock-chart").innerHTML =
     `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Example stacked bar chart of daily AI spend by provider">${s}</svg>`;
