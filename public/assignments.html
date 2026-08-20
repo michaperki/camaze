@@ -2,47 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script src="/theme-init.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>camaze — assignments</title>
 <link rel="stylesheet" href="/shared.css">
 <style>
-  section { margin-bottom: 40px; }
-  h2 { font-size: 16px; margin: 0 0 4px; }
-  .section-hint { color: var(--text-secondary); font-size: 13px; margin: 0 0 16px; }
-
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  thead th {
-    text-align: left;
-    font-weight: 600;
-    color: var(--text-muted);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    padding: 0 10px 8px;
-    border-bottom: 1px solid var(--border);
-  }
-  tbody td {
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    vertical-align: middle;
-  }
-  tbody tr:last-child td { border-bottom: none; }
-  tbody tr.is-unassigned { background: color-mix(in srgb, var(--warning) 6%, transparent); }
-  .col-actions { text-align: right; white-space: nowrap; }
-  .col-amount { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .data-table tbody tr.is-unassigned { background: color-mix(in srgb, var(--warning) 6%, transparent); }
 
   .provider-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
   .provider-swatch { width: 8px; height: 8px; border-radius: 2px; flex: none; }
   .entity-name { font-weight: 500; }
   .entity-scope { display: block; font-size: 11px; color: var(--text-muted); margin-top: 1px; }
-  .unassigned-pill {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 2px 7px;
-    border-radius: 20px;
-    color: var(--warning);
-    background: color-mix(in srgb, var(--warning) 14%, transparent);
-  }
 
   button, input, select {
     font: inherit;
@@ -60,35 +30,7 @@
   .row-status.ok { color: var(--ok-fg); }
   .row-status.error { color: var(--danger); }
 
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 7px 14px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: var(--page);
-    color: var(--text-primary);
-    cursor: pointer;
-  }
-  .btn:hover { border-color: var(--text-muted); }
-  .btn:disabled { opacity: 0.6; cursor: default; }
-  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn-text {
-    background: none;
-    border: none;
-    padding: 4px 2px;
-    font-size: 12px;
-    color: var(--text-muted);
-    text-decoration: underline;
-    text-decoration-color: transparent;
-    cursor: pointer;
-  }
-  .btn-text:hover { color: var(--danger); text-decoration-color: currentColor; }
-  .btn-text:disabled { opacity: 0.6; cursor: default; }
-
-  .create-card { margin-top: 14px; }
-  form.create-form { display: flex; flex-direction: column; gap: 10px; }
+  form.create-form { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
   .field-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
   form.create-form input, form.create-form select { width: 100%; }
   .form-row { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -176,16 +118,16 @@ function entitiesTableHtml() {
         <td><span class="provider-pill"><span class="provider-swatch" style="background:${meta.swatch}"></span>${esc(meta.label)}</span></td>
         <td>
           <span class="entity-name">${esc(e.name || e.id)}</span>
-          <span class="entity-scope">${esc(SCOPE_LABEL[e.scope] || e.scope)}${unassigned ? ' &middot; <span class="unassigned-pill">Unassigned</span>' : ""}</span>
+          <span class="entity-scope">${esc(SCOPE_LABEL[e.scope] || e.scope)}${unassigned ? ' &middot; <span class="badge badge-warning">Unassigned</span>' : ""}</span>
         </td>
-        <td class="col-amount">${fmtUSD(e.amount_usd)}</td>
+        <td class="num">${fmtUSD(e.amount_usd)}</td>
         <td><select class="row-select" data-role="department">${departmentOptionsHtml(e.department.id)}</select></td>
         <td><select class="row-select" data-role="person">${personOptionsHtml(e.person ? e.person.id : null)}</select></td>
         <td class="col-actions"><span class="row-status" data-role="status"></span></td>
       </tr>`;
   }).join("");
   return `
-    <table>
+    <table class="data-table">
       <thead>
         <tr><th>Provider</th><th>Entity</th><th style="text-align:right">This month</th><th>Department</th><th>Owner</th><th></th></tr>
       </thead>
@@ -208,7 +150,7 @@ function departmentsTableHtml() {
       </td>
     </tr>`).join("");
   return `
-    <table>
+    <table class="data-table">
       <thead><tr><th>Name</th><th>Headcount</th><th>Monthly budget</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -229,7 +171,7 @@ function peopleTableHtml() {
       </td>
     </tr>`).join("");
   return `
-    <table>
+    <table class="data-table">
       <thead><tr><th>Name</th><th>Email</th><th>Department</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -311,7 +253,7 @@ async function saveAssignment(row) {
     const scopeEl = row.querySelector(".entity-scope");
     if (scopeEl) {
       scopeEl.innerHTML = esc(SCOPE_LABEL[scope] || scope) +
-        (stillUnassigned ? ' &middot; <span class="unassigned-pill">Unassigned</span>' : "");
+        (stillUnassigned ? ' &middot; <span class="badge badge-warning">Unassigned</span>' : "");
     }
     showRowStatus(row, "Saved", "ok");
   } catch (err) {
@@ -562,17 +504,27 @@ async function main() {
 
   const content = document.getElementById("content");
   content.innerHTML = `
-    <section id="entities-section">
-      <h2>Attribution entities</h2>
-      <p class="section-hint">Every key, workspace, and project spend has been seen from — unassigned ones are highlighted and sorted first.</p>
-      <div id="entities-table"><div class="message">Loading&hellip;</div></div>
-    </section>
-    <section id="departments-section">
-      <h2>Departments</h2>
-      <p class="section-hint">Cost centers spend rolls up to. Edit any field in place — changes save on blur.</p>
-      <div id="departments-table"><div class="message">Loading&hellip;</div></div>
-      <div class="card create-card">
-        <button class="btn" type="button" id="toggle-department-form">Add department</button>
+    <div class="card" id="entities-section">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Attribution entities</div>
+          <div class="panel-description">Every key, workspace, and project spend has been seen from — unassigned ones are highlighted and sorted first.</div>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="entities-table"><div class="message">Loading&hellip;</div></div>
+      </div>
+    </div>
+    <div class="card" id="departments-section">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Departments</div>
+          <div class="panel-description">Cost centers spend rolls up to. Edit any field in place — changes save on blur.</div>
+        </div>
+        <div class="panel-action"><button class="btn btn-sm" type="button" id="toggle-department-form">Add department</button></div>
+      </div>
+      <div class="panel-body">
+        <div id="departments-table"><div class="message">Loading&hellip;</div></div>
         <form class="create-form" id="department-form" style="display:none">
           <div class="form-row">
             <div>
@@ -594,13 +546,17 @@ async function main() {
           </div>
         </form>
       </div>
-    </section>
-    <section id="people-section">
-      <h2>People</h2>
-      <p class="section-hint">Individual owners spend can be assigned to. Edit any field in place — changes save on blur.</p>
-      <div id="people-table"><div class="message">Loading&hellip;</div></div>
-      <div class="card create-card">
-        <button class="btn" type="button" id="toggle-person-form">Add person</button>
+    </div>
+    <div class="card" id="people-section">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">People</div>
+          <div class="panel-description">Individual owners spend can be assigned to. Edit any field in place — changes save on blur.</div>
+        </div>
+        <div class="panel-action"><button class="btn btn-sm" type="button" id="toggle-person-form">Add person</button></div>
+      </div>
+      <div class="panel-body">
+        <div id="people-table"><div class="message">Loading&hellip;</div></div>
         <form class="create-form" id="person-form" style="display:none">
           <div class="form-row">
             <div>
@@ -622,7 +578,7 @@ async function main() {
           </div>
         </form>
       </div>
-    </section>`;
+    </div>`;
 
   const now = new Date();
   state.month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;

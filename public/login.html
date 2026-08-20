@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script src="/theme-init.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>camaze — sign in</title>
 <link rel="stylesheet" href="/shared.css">
@@ -17,6 +18,24 @@
     background: var(--page);
     color: var(--text-primary);
   }
+  /* No shared header on this page (no nav/sign-out to put it next to) —
+     the toggle gets its own fixed corner slot instead, same small
+     bordered-button look as #header-right button in shared.css. */
+  #theme-toggle-btn {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    font: inherit;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+  }
+  #theme-toggle-btn:hover { color: var(--text-primary); }
   .card {
     width: 100%;
     max-width: 340px;
@@ -32,21 +51,7 @@
     font: inherit;
     font-size: 14px;
   }
-  .btn {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 9px 12px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: var(--page);
-    color: var(--text-primary);
-    cursor: pointer;
-  }
-  .btn:hover { border-color: var(--text-muted); }
-  .btn:disabled { opacity: 0.6; cursor: default; }
+  .btn { width: 100%; }
   .btn svg { flex: none; }
   .divider {
     display: flex;
@@ -71,17 +76,13 @@
     color: var(--text-primary);
   }
   input[type="email"]::placeholder { color: var(--text-muted); }
-  .btn-primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-  }
   .status { font-size: 13px; margin-top: 14px; text-align: center; }
   .status.error { color: var(--danger); }
   .status.success { color: var(--text-secondary); }
 </style>
 </head>
 <body>
+<button id="theme-toggle-btn" type="button"></button>
 <div class="card">
   <h1>camaze</h1>
   <p class="subtitle">Sign in to see AI API spend</p>
@@ -108,6 +109,29 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
+// No header.js on this page, so the toggle wires itself up here instead
+// of sharing header.js's copy of this same logic — same "camaze-theme"
+// key /theme-init.js already read on load.
+(function () {
+  const THEME_KEY = "camaze-theme";
+  const btn = document.getElementById("theme-toggle-btn");
+  function isDark() { return document.documentElement.getAttribute("data-theme") === "dark"; }
+  function update() {
+    const dark = isDark();
+    btn.textContent = dark ? "☀" : "☾";
+    btn.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
+    btn.title = btn.getAttribute("aria-label");
+  }
+  btn.addEventListener("click", () => {
+    const next = isDark() ? "light" : "dark";
+    if (next === "dark") document.documentElement.setAttribute("data-theme", "dark");
+    else document.documentElement.removeAttribute("data-theme");
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+    update();
+  });
+  update();
+})();
+
 const statusEl = document.getElementById("status");
 const googleBtn = document.getElementById("google-btn");
 const form = document.getElementById("magic-link-form");

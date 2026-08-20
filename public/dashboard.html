@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script src="/theme-init.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>camaze — how much is that?!</title>
 <link rel="stylesheet" href="/shared.css">
@@ -168,38 +169,6 @@
     color: var(--text-secondary);
     text-align: right;
   }
-  .est-marker {
-    font-size: 10px;
-    color: var(--text-muted);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 0 3px;
-    margin-left: 2px;
-  }
-  .unpriced-marker {
-    font-size: 10px;
-    color: var(--warning);
-    border: 1px solid var(--warning);
-    border-radius: 3px;
-    padding: 0 3px;
-    margin-left: 2px;
-  }
-  .manual-marker {
-    font-size: 10px;
-    color: var(--text-muted);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 0 3px;
-    margin-left: 6px;
-  }
-  .amortized-marker {
-    font-size: 10px;
-    color: var(--text-muted);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 0 3px;
-    margin-left: 2px;
-  }
   .section-footnote {
     font-size: 12px;
     color: var(--text-muted);
@@ -317,17 +286,6 @@
     background: var(--page);
     color: var(--text-primary);
   }
-  .budget-form button, #set-budget-btn {
-    font: inherit;
-    font-size: 12px;
-    color: var(--text-primary);
-    background: var(--page);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 6px 12px;
-    cursor: pointer;
-  }
-  .budget-form button:hover, #set-budget-btn:hover { border-color: var(--text-muted); }
 </style>
 </head>
 <body>
@@ -771,10 +729,10 @@ function renderAttribution(attribution) {
       // badge itself carries the same explanation without needing layout
       // space, the same way the "unpriced" badge already works.
       const estBadge = a.estimated
-        ? `<span class="est-marker" title="Derived from token counts, not billed dollars — Anthropic doesn't report per-API-key cost directly.">est.</span>`
+        ? ` <span class="badge badge-secondary" title="Derived from token counts, not billed dollars — Anthropic doesn't report per-API-key cost directly.">est.</span>`
         : "";
       const unpricedBadge = a.unpriced
-        ? `<span class="unpriced-marker" title="${esc((a.unpricedModels || []).join(', '))}">unpriced</span>`
+        ? ` <span class="badge badge-warning" title="${esc((a.unpricedModels || []).join(', '))}">unpriced</span>`
         : "";
       return (
         '<div class="model-row">' +
@@ -843,7 +801,7 @@ function renderDepartmentBreakdown(attribution) {
       }
     }
     const unassignedBadge = isUnassigned
-      ? `<span class="unpriced-marker" title="Spend from keys/projects with no department or owner set — assign them on the Assignments page">unassigned</span>`
+      ? ` <span class="badge badge-warning" title="Spend from keys/projects with no department or owner set — assign them on the Assignments page">unassigned</span>`
       : "";
     const amountClass = "model-amount" + (status ? ` stat-${status}` : "");
 
@@ -961,8 +919,8 @@ function renderSubscriptions(subscriptions, total) {
   document.getElementById("subscriptions-content").innerHTML = rows.map(s =>
     '<div class="subscription-row">' +
     `<span class="subscription-name">${esc(s.name)}` +
-    (s.manual ? `<span class="manual-marker" title="Manually entered on the Integrations page — not reported by a provider API">manual</span>` : "") +
-    (s.amortized ? `<span class="amortized-marker" title="Billed ${esc(fmtUSD(s.annual_usd))}/year on ${esc(billsOnLabel(s.bills_on))} — shown here divided evenly across each month, so it won't match your card statement in the month it actually bills">amortized</span>` : "") +
+    (s.manual ? ` <span class="badge badge-secondary" title="Manually entered on the Integrations page — not reported by a provider API">manual</span>` : "") +
+    (s.amortized ? ` <span class="badge badge-secondary" title="Billed ${esc(fmtUSD(s.annual_usd))}/year on ${esc(billsOnLabel(s.bills_on))} — shown here divided evenly across each month, so it won't match your card statement in the month it actually bills">amortized</span>` : "") +
     "</span>" +
     `<span class="subscription-amount">${fmtUSD(s.amount_usd)}</span>` +
     "</div>"
@@ -1083,7 +1041,7 @@ function showBudgetForm(accessToken, currentValue) {
   el.innerHTML =
     '<form class="budget-form" id="budget-form">' +
     `<input type="number" id="budget-input" min="0" step="0.01" placeholder="500.00" value="${currentValue ?? ""}" required>` +
-    '<button type="submit">Save</button>' +
+    '<button class="btn btn-sm" type="submit">Save</button>' +
     "</form>" +
     '<span class="stat-card-meta" data-role="budget-error"></span>';
 
@@ -1182,7 +1140,7 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth, from
       showBudgetForm(accessToken, budget);
     });
   } else {
-    budgetContent.innerHTML = '<button id="set-budget-btn" type="button">Set budget</button>';
+    budgetContent.innerHTML = '<button class="btn btn-sm" id="set-budget-btn" type="button">Set budget</button>';
     document.getElementById("set-budget-btn").addEventListener("click", () => {
       showBudgetForm(accessToken, null);
     });

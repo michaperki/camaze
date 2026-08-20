@@ -22,7 +22,7 @@
 }
 
 :root {
-  color-scheme: dark light;
+  color-scheme: light;
   --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   /* Only the two radii that are actually reused as component chrome across
@@ -61,38 +61,43 @@
 /* Marketing pages (index/attribution/alerts/planning/reports/
    integrations-overview/pricing) are light-only by design — the export
    they're modeled on is light-only, and that's the right call for a
-   marketing site regardless of visitor system preference. App pages
-   keep respecting prefers-color-scheme. Scoped by guarding the dark
-   override below with :not([data-site="marketing"]) rather than
-   duplicating the token block — <html data-site="marketing"> is set on
-   the seven marketing pages only. */
+   marketing site. */
 [data-site="marketing"] { color-scheme: light; }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-site="marketing"]) {
-    /* Derived, not copied — the export shipped light-only. Built with
-       the same technique our previous dark palette used on its own
-       light values: near-neutral (low-chroma) backgrounds so near-black
-       doesn't turn muddy, and semantic/accent hues lightened rather
-       than inverted. Flagged in the Stage 3 comparison as unverified
-       until seen rendered. */
-    --page:        #050607;
-    --surface-1:   #0e1012;
-    --text-primary:#f3f5f8;
-    --text-secondary:#aeb9c4;
-    --text-muted:  #7d8792;
-    --grid:        #1d2022;
-    --border:      rgba(255,255,255,0.12);
-    --danger:      #ff6661;
-    --warning:     #ffa156;
-    --ok-bg:       #0f2418;
-    --ok-fg:       #5ac576;
-    --code-bg:     #080a0d;
-    --accent:      #3db9ff;
-    --series-1:    var(--accent);
-    --series-2:    #d95926;
-    --series-3:    #199e70;
-  }
+/* App pages: light by default, same as marketing — neither follows
+   prefers-color-scheme any more. Dark is an explicit opt-in via the
+   toggle in the header (button in header.js, next to sign-out), applied
+   through [data-theme="dark"] on <html> rather than a media query.
+   /theme-init.js sets that attribute from localStorage synchronously,
+   before first paint, so there's no flash of the wrong theme — see its
+   comment for why it has to be a blocking <script> in <head>, not this
+   stylesheet, doing the reading. The :not([data-site="marketing"])
+   guard is defensive: nothing on the seven marketing pages loads
+   theme-init.js or renders the toggle, so this selector should never
+   actually need to fire there. */
+:root[data-theme="dark"]:not([data-site="marketing"]) {
+  /* Derived, not copied — the export shipped light-only. Built with
+     the same technique our previous dark palette used on its own
+     light values: near-neutral (low-chroma) backgrounds so near-black
+     doesn't turn muddy, and semantic/accent hues lightened rather
+     than inverted. */
+  color-scheme: dark;
+  --page:        #050607;
+  --surface-1:   #0e1012;
+  --text-primary:#f3f5f8;
+  --text-secondary:#aeb9c4;
+  --text-muted:  #7d8792;
+  --grid:        #1d2022;
+  --border:      rgba(255,255,255,0.12);
+  --danger:      #ff6661;
+  --warning:     #ffa156;
+  --ok-bg:       #0f2418;
+  --ok-fg:       #5ac576;
+  --code-bg:     #080a0d;
+  --accent:      #3db9ff;
+  --series-1:    var(--accent);
+  --series-2:    #d95926;
+  --series-3:    #199e70;
 }
 
 * { box-sizing: border-box; }
@@ -134,6 +139,14 @@ a { color: inherit; }
   border-radius: var(--radius-lg);
   padding: 18px 20px;
 }
+/* App-page section rhythm: consecutive titled cards are how the app
+   pages (dashboard/integrations/notifications/gateway/assignments) lay
+   out distinct content blocks now that each one carries its own
+   panel-header instead of a page-level heading floating above a bare
+   div. Not scoped to :not(.mkt-main) — marketing pages don't place two
+   .card elements as direct siblings (each lives alone in its own
+   .mkt-visual), so this never fires there in practice. */
+.card + .card { margin-top: 20px; }
 
 /* Card-header convention extracted from the Lovable export: title (+
    optional description) on the left, an optional corner action on the
@@ -274,21 +287,13 @@ nav.tabs a.active {
 }
 
 /* Button system — a base plus color and size modifiers, the hand-written
-   equivalent of the export's cva variant map.
-
-   Scoped under .mkt-main/#site-footer rather than left as a bare .btn:
-   assignments/gateway/integrations/login/notifications.html each already
-   define their own local, differently-shaped .btn/.btn-primary/.btn-text.
-   A bare global .btn here would still visually change those pages —
-   CSS cascades per *property*, so anything this rule sets that a
-   same-specificity local rule doesn't (font-weight, gap, transition)
-   would leak through even though the local rule "wins" on the
-   properties it does set. Scoping avoids that without touching five
-   live app pages in a pass that was supposed to be marketing-only.
-   .btn-outline below is functionally the same bordered button the app
-   pages already define locally — real adoption later means resolving
-   that collision deliberately, not inheriting it by accident now. */
-.mkt-main .btn, #site-footer .btn, #app-header .btn {
+   equivalent of the export's cva variant map. Global now: it used to be
+   scoped under .mkt-main/#site-footer/#app-header because
+   assignments/gateway/integrations/login/notifications.html each
+   defined their own local, differently-shaped .btn/.btn-primary/
+   .btn-text — this pass is that deliberate adoption the old comment
+   here anticipated, and those five pages' local duplicates are gone. */
+.btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -305,24 +310,41 @@ nav.tabs a.active {
   cursor: pointer;
   transition: border-color .15s, background-color .15s, color .15s, opacity .15s;
 }
-.mkt-main .btn:hover, #app-header .btn:hover { border-color: var(--text-muted); }
-.mkt-main .btn:disabled, #app-header .btn:disabled { opacity: .6; cursor: default; }
+.btn:hover { border-color: var(--text-muted); }
+.btn:disabled { opacity: .6; cursor: default; }
 
-.mkt-main .btn-primary, #app-header .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.mkt-main .btn-primary:hover, #app-header .btn-primary:hover { opacity: .92; border-color: var(--accent); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { opacity: .92; border-color: var(--accent); }
 
-.mkt-main .btn-outline { background: var(--page); border-color: var(--border); color: var(--text-primary); }
+.btn-outline { background: var(--page); border-color: var(--border); color: var(--text-primary); }
 
-.mkt-main .btn-secondary { background: var(--code-bg); border-color: transparent; color: var(--text-primary); }
-.mkt-main .btn-secondary:hover { background: var(--grid); border-color: transparent; }
+.btn-secondary { background: var(--code-bg); border-color: transparent; color: var(--text-primary); }
+.btn-secondary:hover { background: var(--grid); border-color: transparent; }
 
-.mkt-main .btn-ghost { background: transparent; border-color: transparent; color: var(--text-secondary); }
-.mkt-main .btn-ghost:hover { background: var(--code-bg); color: var(--text-primary); border-color: transparent; }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--text-secondary); }
+.btn-ghost:hover { background: var(--code-bg); color: var(--text-primary); border-color: transparent; }
 
-.mkt-main .btn-sm, #app-header .btn-sm { padding: 5px 11px; font-size: 12px; }
-.mkt-main .btn-lg { padding: 11px 26px; font-size: 15px; }
-.mkt-main .btn-icon { padding: 0; width: 32px; height: 32px; flex: none; }
-.mkt-main .btn-icon.btn-sm { width: 26px; height: 26px; }
+/* Text-only button — an inline action (revoke a key, remove a row) that
+   shouldn't look as heavy as a bordered .btn. Turns danger-red on hover
+   since every current use is a destructive/undo-style action. */
+.btn-text {
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  cursor: pointer;
+}
+.btn-text:hover { color: var(--danger); text-decoration-color: currentColor; }
+.btn-text:disabled { opacity: .6; cursor: default; }
+
+.btn-sm { padding: 5px 11px; font-size: 12px; }
+.btn-lg { padding: 11px 26px; font-size: 15px; }
+.btn-icon { padding: 0; width: 32px; height: 32px; flex: none; }
+.btn-icon.btn-sm { width: 26px; height: 26px; }
 
 /* Badges/chips — small, uppercase, tracked, bordered. The export keeps
    its base Badge normal-case and only tracks-wider on specific chips
@@ -370,6 +392,7 @@ nav.tabs a.active {
 .data-table tbody tr:last-child td { border-bottom: none; }
 .data-table tbody tr:hover td { background: var(--code-bg); }
 .data-table .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.data-table .col-actions { text-align: right; white-space: nowrap; }
 
 main.mkt-main {
   max-width: 1040px;

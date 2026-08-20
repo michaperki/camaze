@@ -2,35 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script src="/theme-init.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>camaze — integrations</title>
 <link rel="stylesheet" href="/shared.css">
 <style>
-  /* Same visual recipe as .card (background/border/radius/padding) plus
-     list spacing between repeated provider cards — .card supplies the
-     rest via the "card provider-card" class pair in the markup below. */
-  .provider-card { margin-bottom: 14px; }
-  .provider-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .provider-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
-  .provider-name { font-size: 15px; font-weight: 600; margin-right: auto; }
-  .provider-meta { font-size: 12px; color: var(--text-muted); }
-  .status-pill {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 8px;
-    border-radius: 20px;
-    color: var(--text-secondary);
-    background: var(--page);
-    border: 1px solid var(--border);
-  }
-  .status-pill.connected { color: var(--ok-fg); background: var(--ok-bg); border-color: transparent; }
-
-  .provider-body { margin-top: 12px; font-size: 13px; color: var(--text-secondary); }
+  .provider-title { display: flex; align-items: center; gap: 7px; }
+  .provider-swatch { width: 9px; height: 9px; border-radius: 3px; flex: none; }
   .key-hint { font-variant-numeric: tabular-nums; color: var(--text-primary); font-size: 13px; }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
 
@@ -38,32 +16,6 @@
     font: inherit;
     font-size: 13px;
   }
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 7px 14px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: var(--page);
-    color: var(--text-primary);
-    cursor: pointer;
-  }
-  .btn:hover { border-color: var(--text-muted); }
-  .btn:disabled { opacity: 0.6; cursor: default; }
-  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn-text {
-    background: none;
-    border: none;
-    padding: 4px 2px;
-    font-size: 12px;
-    color: var(--text-muted);
-    text-decoration: underline;
-    text-decoration-color: transparent;
-    cursor: pointer;
-  }
-  .btn-text:hover { color: var(--danger); text-decoration-color: currentColor; }
-  .btn-text:disabled { opacity: 0.6; cursor: default; }
 
   .instructions { margin: 10px 0 12px; line-height: 1.6; }
   .instructions ol { margin: 6px 0 0; padding-left: 20px; }
@@ -102,8 +54,11 @@
   .form-actions { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
   .form-error { font-size: 13px; color: var(--danger); }
 
-  .section-heading { font-size: 15px; font-weight: 600; margin: 32px 0 4px; }
-  .section-subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 14px; }
+  /* #content (the three provider cards) is a plain wrapper div, not a
+     .card itself, so the shared .card + .card rhythm rule never sees
+     this card as adjacent to the last provider card — same margin,
+     applied directly. */
+  #fixed-costs-card { margin-top: 20px; }
   .row-fields { display: flex; gap: 8px; }
   .row-fields > div { flex: 1; }
   .fixed-cost-row-meta { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
@@ -128,10 +83,15 @@
   <p class="subtitle">Connect your own provider keys — stored encrypted, used only to fetch your spend</p>
   <div id="content"><div class="message">Loading&hellip;</div></div>
 
-  <h2 class="section-heading">Subscriptions &amp; seats</h2>
-  <p class="section-subtitle">Consumer subscriptions and per-seat licenses no provider API reports —
-    Claude Pro, ChatGPT Plus, Copilot seats, Cursor. Counted in full for any month they were active.</p>
-  <div class="card provider-card">
+  <div class="card" id="fixed-costs-card">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">Subscriptions &amp; seats</div>
+        <div class="panel-description">Consumer subscriptions and per-seat licenses no provider API reports —
+          Claude Pro, ChatGPT Plus, Copilot seats, Cursor. Counted in full for any month they were active.</div>
+      </div>
+    </div>
+    <div class="panel-body">
     <div id="fixed-costs-list"><div class="message">Loading&hellip;</div></div>
     <button class="btn" type="button" id="add-fixed-cost-btn">Add subscription</button>
     <form class="connect-form" id="fixed-cost-form" style="display:none">
@@ -178,6 +138,7 @@
         <span class="form-error" data-role="fixed-cost-error"></span>
       </div>
     </form>
+    </div>
   </div>
 </main>
 
@@ -258,8 +219,8 @@ function fieldsHtml(provider) {
 function cardHtml(provider, state) {
   const connected = !!state?.connected;
   const statusHtml = connected
-    ? `<span class="status-pill connected">Connected</span>`
-    : `<span class="status-pill">Not connected</span>`;
+    ? `<span class="badge badge-success">Connected</span>`
+    : `<span class="badge badge-secondary">Not connected</span>`;
 
   // Collapsed by default once connected (the card's job then is showing
   // status, not onboarding) but always present — previously the whole
@@ -278,27 +239,23 @@ function cardHtml(provider, state) {
       ? `Billing project <span class="key-hint">${esc(state.hint || "")}</span>`
       : `<span class="key-hint">${provider.name === "anthropic" ? "sk-ant-admin" : "sk-admin"}...${esc(state.hint || "")}</span>`;
     body = `
-      <div class="provider-body">
-        <div class="row">
-          <span>${hint}</span>
-          <button class="btn-text" type="button" data-action="disconnect" data-provider="${provider.name}">Disconnect</button>
-        </div>
-        ${instructionsHtml}
-      </div>`;
+      <div class="row">
+        <span>${hint}</span>
+        <button class="btn-text" type="button" data-action="disconnect" data-provider="${provider.name}">Disconnect</button>
+      </div>
+      ${instructionsHtml}`;
   } else {
     body = `
-      <div class="provider-body">
-        ${instructionsHtml}
-        <button class="btn" type="button" data-action="toggle-form" data-provider="${provider.name}">Connect</button>
-        <form class="connect-form" data-provider="${provider.name}" style="display:none">
-          <input type="hidden" name="provider" value="${esc(provider.name)}">
-          ${fieldsHtml(provider)}
-          <div class="form-actions">
-            <button class="btn btn-primary" type="submit">Connect</button>
-            <span class="form-error" data-role="error"></span>
-          </div>
-        </form>
-      </div>`;
+      ${instructionsHtml}
+      <button class="btn" type="button" data-action="toggle-form" data-provider="${provider.name}">Connect</button>
+      <form class="connect-form" data-provider="${provider.name}" style="display:none">
+        <input type="hidden" name="provider" value="${esc(provider.name)}">
+        ${fieldsHtml(provider)}
+        <div class="form-actions">
+          <button class="btn btn-primary" type="submit">Connect</button>
+          <span class="form-error" data-role="error"></span>
+        </div>
+      </form>`;
   }
 
   // No real last-sync timestamp exists on the backend — the key record's
@@ -308,14 +265,15 @@ function cardHtml(provider, state) {
   const meta = connected ? "" : esc(provider.time);
 
   return `
-    <div class="card provider-card" data-card="${provider.name}">
-      <div class="provider-head">
-        <span class="provider-swatch" style="background:${provider.swatch}"></span>
-        <span class="provider-name">${esc(provider.label)}</span>
-        <span class="provider-meta">${meta}</span>
-        ${statusHtml}
+    <div class="card" data-card="${provider.name}">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title provider-title"><span class="provider-swatch" style="background:${provider.swatch}"></span>${esc(provider.label)}</div>
+          ${meta ? `<div class="panel-description">${meta}</div>` : ""}
+        </div>
+        <div class="panel-action">${statusHtml}</div>
       </div>
-      ${body}
+      <div class="panel-body">${body}</div>
     </div>`;
 }
 
@@ -361,7 +319,7 @@ async function main() {
   content.addEventListener("click", (e) => {
     const toggleBtn = e.target.closest('[data-action="toggle-form"]');
     if (toggleBtn) {
-      const card = toggleBtn.closest(".provider-card");
+      const card = toggleBtn.closest("[data-card]");
       const form = card.querySelector("form.connect-form");
       form.style.display = form.style.display === "none" ? "flex" : "none";
       return;

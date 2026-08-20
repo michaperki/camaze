@@ -2,16 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script src="/theme-init.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>camaze — notifications</title>
 <link rel="stylesheet" href="/shared.css">
 <style>
-  /* Same visual recipe as .card plus list spacing between sections —
-     .card supplies the rest via "card section-card". */
-  .section-card { margin-bottom: 14px; }
-  .section-title { font-size: 15px; font-weight: 600; }
-  .section-desc { font-size: 13px; color: var(--text-secondary); margin: 3px 0 14px; }
-
   label.checkbox-row {
     display: flex;
     align-items: center;
@@ -63,15 +58,6 @@
   .delivery-row.is-dimmed { opacity: 0.45; }
   .field-label { font-size: 12px; color: var(--text-muted); }
   .field-note { font-size: 12px; color: var(--text-muted); margin: 6px 0 0; }
-  .pill {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 8px;
-    border-radius: 20px;
-    color: var(--text-secondary);
-    background: var(--page);
-    border: 1px solid var(--border);
-  }
 
   button, input, select {
     font: inherit;
@@ -93,21 +79,6 @@
     color: var(--text-primary);
   }
   input[type="number"]:disabled { opacity: 0.55; cursor: not-allowed; }
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 7px 14px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: var(--page);
-    color: var(--text-primary);
-    cursor: pointer;
-  }
-  .btn:hover { border-color: var(--text-muted); }
-  .btn:disabled { opacity: 0.6; cursor: default; }
-  .btn-secondary { background: var(--surface-1); border-color: var(--text-muted); }
-  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
 
   .test-row {
     display: flex;
@@ -147,29 +118,34 @@ function hourOptionsHtml(selected) {
 
 function digestSectionHtml(settings) {
   return `
-    <div class="card section-card" id="digest-section">
-      <div class="section-title">Daily Digest</div>
-      <p class="section-desc">Receive a daily spend summary by email.</p>
-
-      <label class="checkbox-row">
-        <input type="checkbox" id="digest-enabled" ${settings.digestEnabled ? "checked" : ""}>
-        Enable daily digest
-        <span class="save-status" id="digest-save-status"></span>
-      </label>
-
-      <div class="delivery-row${settings.digestEnabled ? "" : " is-dimmed"}" id="delivery-row">
-        <span class="field-label">Delivery time</span>
-        <select id="hour-select" disabled>${hourOptionsHtml(settings.digestHour)}</select>
-        <select id="tz-select" disabled>
-          <option value="UTC">UTC</option>
-        </select>
-        <span class="pill">Coming soon</span>
+    <div class="card" id="digest-section">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Daily Digest</div>
+          <div class="panel-description">Receive a daily spend summary by email.</div>
+        </div>
       </div>
-      <p class="field-note">Every digest currently sends once a day at 9:00 AM UTC.</p>
+      <div class="panel-body">
+        <label class="checkbox-row">
+          <input type="checkbox" id="digest-enabled" ${settings.digestEnabled ? "checked" : ""}>
+          Enable daily digest
+          <span class="save-status" id="digest-save-status"></span>
+        </label>
 
-      <div class="test-row">
-        <button class="btn btn-secondary" id="test-btn" type="button">Send test email now</button>
-        <span class="test-status" id="test-status"></span>
+        <div class="delivery-row${settings.digestEnabled ? "" : " is-dimmed"}" id="delivery-row">
+          <span class="field-label">Delivery time</span>
+          <select id="hour-select" disabled>${hourOptionsHtml(settings.digestHour)}</select>
+          <select id="tz-select" disabled>
+            <option value="UTC">UTC</option>
+          </select>
+          <span class="badge badge-secondary">Coming soon</span>
+        </div>
+        <p class="field-note">Every digest currently sends once a day at 9:00 AM UTC.</p>
+
+        <div class="test-row">
+          <button class="btn btn-secondary" id="test-btn" type="button">Send test email now</button>
+          <span class="test-status" id="test-status"></span>
+        </div>
       </div>
     </div>`;
 }
@@ -189,10 +165,14 @@ function alertsSectionHtml(settings) {
       </div>`;
 
   return `
-    <div class="card section-card" id="alerts-section">
-      <div class="section-title">Alerts</div>
-      <p class="section-desc">Get emailed the moment something looks off &mdash; sent separately from the daily digest.</p>
-
+    <div class="card" id="alerts-section">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Alerts</div>
+          <div class="panel-description">Get emailed the moment something looks off &mdash; sent separately from the daily digest.</div>
+        </div>
+      </div>
+      <div class="panel-body">
       <label class="checkbox-row">
         <input type="checkbox" id="spike-enabled" ${settings.spikeAlertsEnabled ? "checked" : ""}>
         Spike alerts
@@ -210,6 +190,7 @@ function alertsSectionHtml(settings) {
       <div class="test-row">
         <button class="btn btn-secondary" id="alert-test-btn" type="button">Send test alert</button>
         <span class="test-status" id="alert-test-status"></span>
+      </div>
       </div>
     </div>`;
 }
