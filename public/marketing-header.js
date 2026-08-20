@@ -31,7 +31,10 @@
       '<div class="header-inner">' +
       '<a class="wordmark" href="/">camaze</a>' +
       `<nav class="tabs">${links}</nav>` +
+      '<div class="nav-cta">' +
       '<a class="signin-link" href="/login.html">Sign in</a>' +
+      '<a class="btn btn-primary btn-sm" href="/login.html">Get started</a>' +
+      '</div>' +
       "</div>";
   }
 

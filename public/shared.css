@@ -53,8 +53,18 @@
   --series-2:    #eb6834;       /* OpenAI */
   --series-3:    #1baf7a;       /* Google */
 }
+/* Marketing pages (index/attribution/alerts/planning/reports/
+   integrations-overview/pricing) are light-only by design — the export
+   they're modeled on is light-only, and that's the right call for a
+   marketing site regardless of visitor system preference. App pages
+   keep respecting prefers-color-scheme. Scoped by guarding the dark
+   override below with :not([data-site="marketing"]) rather than
+   duplicating the token block — <html data-site="marketing"> is set on
+   the seven marketing pages only. */
+[data-site="marketing"] { color-scheme: light; }
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-site="marketing"]) {
     /* Derived, not copied — the export shipped light-only. Built with
        the same technique our previous dark palette used on its own
        light values: near-neutral (low-chroma) backgrounds so near-black
@@ -245,13 +255,19 @@ nav.tabs a.active {
   font-size: 13px;
   color: var(--text-secondary);
   text-decoration: none;
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 6px 12px;
+  padding: 6px 4px;
   flex: none;
 }
-.signin-link:hover { color: var(--text-primary); border-color: var(--text-muted); }
+.signin-link:hover { color: var(--text-primary); }
+
+/* Two-CTA header treatment: a plain-text secondary link (Sign in) beside
+   a filled primary button (Get started) — no dropdowns yet. */
+.nav-cta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+}
 
 /* Button system — a base plus color and size modifiers, the hand-written
    equivalent of the export's cva variant map.
@@ -268,7 +284,7 @@ nav.tabs a.active {
    .btn-outline below is functionally the same bordered button the app
    pages already define locally — real adoption later means resolving
    that collision deliberately, not inheriting it by accident now. */
-.mkt-main .btn, #site-footer .btn {
+.mkt-main .btn, #site-footer .btn, #app-header .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -285,11 +301,11 @@ nav.tabs a.active {
   cursor: pointer;
   transition: border-color .15s, background-color .15s, color .15s, opacity .15s;
 }
-.mkt-main .btn:hover { border-color: var(--text-muted); }
-.mkt-main .btn:disabled { opacity: .6; cursor: default; }
+.mkt-main .btn:hover, #app-header .btn:hover { border-color: var(--text-muted); }
+.mkt-main .btn:disabled, #app-header .btn:disabled { opacity: .6; cursor: default; }
 
-.mkt-main .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.mkt-main .btn-primary:hover { opacity: .92; border-color: var(--accent); }
+.mkt-main .btn-primary, #app-header .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.mkt-main .btn-primary:hover, #app-header .btn-primary:hover { opacity: .92; border-color: var(--accent); }
 
 .mkt-main .btn-outline { background: var(--page); border-color: var(--border); color: var(--text-primary); }
 
@@ -299,7 +315,7 @@ nav.tabs a.active {
 .mkt-main .btn-ghost { background: transparent; border-color: transparent; color: var(--text-secondary); }
 .mkt-main .btn-ghost:hover { background: var(--code-bg); color: var(--text-primary); border-color: transparent; }
 
-.mkt-main .btn-sm { padding: 5px 11px; font-size: 12px; }
+.mkt-main .btn-sm, #app-header .btn-sm { padding: 5px 11px; font-size: 12px; }
 .mkt-main .btn-lg { padding: 11px 26px; font-size: 15px; }
 .mkt-main .btn-icon { padding: 0; width: 32px; height: 32px; flex: none; }
 .mkt-main .btn-icon.btn-sm { width: 26px; height: 26px; }
@@ -352,50 +368,135 @@ nav.tabs a.active {
 .data-table .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
 
 main.mkt-main {
-  max-width: 960px;
+  max-width: 1040px;
 }
 
+/* Breadcrumb — sits above the hero on every marketing page except the
+   homepage itself. Small and muted on purpose: it's wayfinding, not a
+   headline, so it can't compete with the type-scale jump below. */
+.mkt-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 18px 0 0;
+}
+.mkt-breadcrumb a { color: var(--text-muted); text-decoration: none; }
+.mkt-breadcrumb a:hover { color: var(--text-primary); }
+.mkt-breadcrumb .sep { color: var(--border); }
+
 .mkt-hero {
-  padding: 48px 0 32px;
+  padding: 28px 0 32px;
   text-align: center;
 }
 .mkt-hero .label-micro { display: flex; justify-content: center; margin-bottom: 14px; }
 .mkt-hero h1 {
-  font-size: clamp(26px, 5vw, 38px);
-  line-height: 1.2;
+  /* Dramatic on purpose — the export's hero runs ~56px against ~13px
+     body text. Ours sat too close together (26–38 vs. 14.5); widen the
+     gap so the headline actually dominates instead of blending in. */
+  font-size: clamp(32px, 6vw, 56px);
+  line-height: 1.12;
   font-weight: 700;
-  letter-spacing: -0.01em;
-  margin: 0 auto 14px;
-  max-width: 22ch;
+  letter-spacing: -0.02em;
+  margin: 0 auto 16px;
+  max-width: 20ch;
   text-wrap: balance;
 }
 .mkt-hero .lede {
-  font-size: 16px;
+  font-size: 15px;
   color: var(--text-secondary);
-  margin: 0 auto 28px;
-  max-width: 560px;
+  margin: 0 auto 24px;
+  max-width: 540px;
   line-height: 1.55;
 }
 
-.mkt-section { border-top: 1px solid var(--border); padding: 32px 0; }
+/* Primary CTA + a secondary text link beneath it — used in the hero and
+   in the closing .mkt-cta band. Centered there since both are the rare,
+   deliberately-centered exceptions; everything else is left-aligned. */
+.mkt-cta-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.mkt-cta-secondary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.mkt-cta-secondary:hover { color: var(--text-primary); text-decoration: underline; }
+
+/* "Short version" summary box — a one- or two-line synopsis directly
+   under the hero, before the reader commits to the full section-by-
+   section read. */
+.mkt-tldr {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
+  margin: 0 0 8px;
+}
+.mkt-tldr .label-micro { margin-bottom: 4px; }
+.mkt-tldr p { font-size: 13px; color: var(--text-secondary); line-height: 1.55; margin: 0; max-width: 68ch; }
+
+.mkt-section { border-top: 1px solid var(--border); padding: 40px 0; }
 .mkt-section > .label-micro { margin-bottom: 10px; }
 .mkt-section h2 {
-  font-size: 21px;
+  font-size: clamp(22px, 3vw, 28px);
   font-weight: 700;
-  letter-spacing: -0.01em;
-  margin: 0 0 10px;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  margin: 0 0 12px;
 }
 .mkt-section .lede {
-  font-size: 14.5px;
+  font-size: 13px;
   color: var(--text-secondary);
-  line-height: 1.6;
-  max-width: 62ch;
+  line-height: 1.65;
+  max-width: 56ch;
   margin: 0 0 20px;
 }
 
+/* Section-level two-column layout: a left text column (label, heading,
+   lede, sub-CTA) beside a right visual column (a card, table, mock, or
+   code block). This is the export's dominant pattern — almost every
+   section after its hero reads this way — and now ours does too, in
+   place of a single centered text block per section. */
+.mkt-section-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px 48px;
+  align-items: start;
+}
+.mkt-section-split .mkt-copy { min-width: 0; }
+.mkt-section-split .mkt-visual { min-width: 0; }
+.mkt-section-split.reverse .mkt-copy { order: 2; }
+.mkt-section-split.reverse .mkt-visual { order: 1; }
+@media (max-width: 860px) {
+  .mkt-section-split { grid-template-columns: 1fr; gap: 20px; }
+  .mkt-section-split.reverse .mkt-copy,
+  .mkt-section-split.reverse .mkt-visual { order: initial; }
+}
+
+/* Sub-CTA — a small link at the end of a section's copy, driving toward
+   the same conversion as the page's main CTA but scoped to that
+   section's specific claim rather than repeating the hero button. */
+.mkt-subcta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  margin-top: 4px;
+}
+.mkt-subcta:hover { text-decoration: underline; }
+
 .mkt-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 .mkt-grid h3 { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
-.mkt-grid p { font-size: 14px; color: var(--text-secondary); margin: 0; line-height: 1.55; }
+.mkt-grid p { font-size: 13px; color: var(--text-secondary); margin: 0; line-height: 1.55; }
 
 .mkt-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .mkt-tile {
@@ -414,11 +515,50 @@ main.mkt-main {
   flex-wrap: wrap;
   font-size: 14px; font-weight: 600; margin-bottom: 5px;
 }
-.mkt-tile .tile-desc { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
+.mkt-tile .tile-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
 
-.mkt-cta { border-top: 1px solid var(--border); padding: 36px 0; text-align: center; }
-.mkt-cta h2 { font-size: 22px; font-weight: 700; margin: 0 0 10px; letter-spacing: -0.01em; }
-.mkt-cta p { font-size: 14px; color: var(--text-secondary); margin: 0 0 20px; }
+.mkt-cta { border-top: 1px solid var(--border); padding: 40px 0; text-align: center; }
+.mkt-cta h2 { font-size: clamp(22px, 3vw, 28px); font-weight: 700; margin: 0 0 10px; letter-spacing: -0.015em; }
+.mkt-cta p { font-size: 13px; color: var(--text-secondary); margin: 0 0 20px; }
+
+/* Small illustrative mocks — a stat row, a budget bar, a legend, a chart
+   caption, a code block. Built from tokens already in use elsewhere
+   (badges, .card, --series-*), always paired with a "not your account"
+   caption. Shared here because every marketing page uses at least one. */
+.mock-section { padding: 0; }
+.mock-dashboard {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px 20px 16px;
+}
+.mock-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+.mock-stat { background: var(--page); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; }
+.mock-stat-label { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.mock-stat-value {
+  font-size: 21px; font-weight: 600; font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums; margin-top: 4px;
+}
+.mock-stat-value.stat-warning { color: var(--warning); }
+.mock-stat-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+.mock-budget-track { background: var(--grid); border-radius: 3px; height: 6px; margin-top: 9px; }
+.mock-budget-bar { height: 100%; border-radius: 3px; background: var(--warning); }
+.mock-legend { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; }
+.mock-legend-item { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+.mock-legend-swatch { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+.mock-caption { font-size: 12px; color: var(--text-muted); text-align: center; margin: 12px 0 0; }
+
+.mkt-code-block {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  overflow-x: auto;
+  white-space: pre;
+}
 
 #site-footer { border-top: 1px solid var(--border); }
 .footer-inner {
@@ -436,5 +576,7 @@ main.mkt-main {
 .footer-inner a:hover { text-decoration: underline; }
 
 @media (max-width: 700px) {
-  .mkt-grid, .mkt-tiles { grid-template-columns: 1fr; }
+  .mkt-grid, .mkt-tiles, .mock-stats { grid-template-columns: 1fr; }
+  .nav-cta { gap: 8px; }
+  .nav-cta .btn-sm { padding: 5px 9px; }
 }

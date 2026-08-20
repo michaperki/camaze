@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-site="marketing">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,15 +7,14 @@
 <meta name="description" content="camaze forecasts where your AI spend lands by month-end, before the invoice arrives.">
 <link rel="stylesheet" href="/shared.css">
 <style>
-  .split-mock { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .split-mock { display: flex; flex-direction: column; gap: 10px; }
   .split-mock .card { padding: 16px 18px; }
   .split-mock .label-micro { margin-bottom: 8px; }
   .split-value {
     font-family: var(--font-mono); font-variant-numeric: tabular-nums;
     font-size: 19px; font-weight: 600;
   }
-  .split-mock p { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin: 8px 0 0; }
-  @media (max-width: 700px) { .split-mock { grid-template-columns: 1fr; } }
+  .split-mock p { font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin: 8px 0 0; }
 </style>
 </head>
 <body>
@@ -23,46 +22,82 @@
 <script src="/marketing-header.js"></script>
 
 <main class="mkt-main">
+  <div class="mkt-breadcrumb"><a href="/">Home</a><span class="sep">/</span><span>Planning</span></div>
+
   <section class="mkt-hero">
     <div class="label-micro">Planning</div>
     <h1>See where this month lands before it closes.</h1>
     <p class="lede">camaze forecasts your month-end AI spend from what's happened so far this month, colored against the budget you've set — so a forecast that's about to cross the line shows up in yellow or red before it's a surprise on the invoice.</p>
-    <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+    <div class="mkt-cta-actions">
+      <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+      <a class="mkt-cta-secondary" href="#forecast">See how it works ↓</a>
+    </div>
   </section>
 
-  <section class="mkt-section">
-    <div class="label-micro">How the forecast is built</div>
-    <h2>Usage and subscriptions, forecast differently</h2>
-    <p class="lede">A flat monthly subscription and metered API usage don't behave the same way, so camaze doesn't forecast them the same way. Usage is extrapolated from your run-rate so far this month, since it can spike or slow down. A subscription's daily rate is close to constant, so camaze projects it linearly instead — extrapolating a fixed cost like it might vary would just add noise. The two projections are computed separately, then summed into one month-end number.</p>
-    <div class="split-mock">
-      <div class="card">
-        <div class="label-micro">Usage — extrapolated from run-rate</div>
-        <div class="split-value">$540.20</div>
-        <p>Scales with how this month is actually trending.</p>
-      </div>
-      <div class="card">
-        <div class="label-micro">Subscriptions — projected linearly</div>
-        <div class="split-value">$72.20</div>
-        <p>Near-constant by nature, so it's projected as such.</p>
+  <section class="mkt-tldr">
+    <div class="label-micro">The short version</div>
+    <p>Usage and fixed subscriptions are forecast differently and summed into one month-end number, then colored against the budget you set — green, yellow, or red.</p>
+  </section>
+
+  <section class="mkt-section-split" id="forecast">
+    <div class="mkt-copy">
+      <div class="label-micro">How the forecast is built</div>
+      <h2>Usage and subscriptions, forecast differently</h2>
+      <p class="lede">A flat monthly subscription and metered API usage don't behave the same way, so camaze doesn't forecast them the same way. Usage is extrapolated from your run-rate so far this month. A subscription's daily rate is close to constant, so camaze projects it linearly instead. The two projections are computed separately, then summed into one month-end number.</p>
+      <a class="mkt-subcta" href="/login.html">See your own forecast →</a>
+    </div>
+    <div class="mkt-visual">
+      <div class="split-mock">
+        <div class="card">
+          <div class="label-micro">Usage — extrapolated from run-rate</div>
+          <div class="split-value">$540.20</div>
+          <p>Scales with how this month is actually trending.</p>
+        </div>
+        <div class="card">
+          <div class="label-micro">Subscriptions — projected linearly</div>
+          <div class="split-value">$72.20</div>
+          <p>Near-constant by nature, so it's projected as such.</p>
+        </div>
       </div>
     </div>
   </section>
 
-  <section class="mkt-section">
-    <div class="label-micro">Budget-aware</div>
-    <h2>Green, yellow, or red — against your number, not a guess</h2>
-    <p class="lede">Set a monthly budget on the dashboard, and the forecast is colored against it. It's the same number the budget alert watches, so what you see on the dashboard and what lands in your inbox never disagree.</p>
-    <div class="badge-row">
-      <span class="badge badge-success">Comfortably under</span>
-      <span class="badge badge-warning">Approaching budget</span>
-      <span class="badge badge-danger">Forecast over budget</span>
+  <section class="mkt-section-split reverse">
+    <div class="mkt-copy">
+      <div class="label-micro">Budget-aware</div>
+      <h2>Green, yellow, or red — against your number, not a guess</h2>
+      <p class="lede">Set a monthly budget on the dashboard, and the forecast is colored against it. It's the same number the budget alert watches, so what you see on the dashboard and what lands in your inbox never disagree.</p>
+      <a class="mkt-subcta" href="/login.html">Set your budget →</a>
+    </div>
+    <div class="mkt-visual">
+      <div class="card">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Month-end forecast</div>
+            <div class="panel-description">Example data — not your account.</div>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="mock-stat-label">Forecast vs. budget</div>
+          <div class="mock-stat-value stat-warning">$612.40 <span style="font-weight:400;font-size:13px;color:var(--text-muted)">of $750.00</span></div>
+          <div class="mock-budget-track"><div class="mock-budget-bar" style="width:82%"></div></div>
+          <div class="badge-row" style="margin-top:12px;">
+            <span class="badge badge-success">Comfortably under</span>
+            <span class="badge badge-warning">Approaching budget</span>
+            <span class="badge badge-danger">Forecast over budget</span>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
   <section class="mkt-cta">
     <h2>Ready to see your own numbers?</h2>
     <p>Connect Anthropic, OpenAI, or Google in a couple minutes.</p>
-    <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+    <div class="mkt-cta-actions">
+      <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+      <a class="mkt-cta-secondary" href="/pricing">Questions about pricing? →</a>
+    </div>
   </section>
 </main>
 

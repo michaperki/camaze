@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-site="marketing">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,7 +10,7 @@
   .provider-list { display: grid; gap: 12px; }
   .provider-title { display: flex; align-items: center; gap: 8px; }
   .p-swatch { width: 9px; height: 9px; border-radius: 3px; flex: none; }
-  .panel-body p { font-size: 12.5px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+  .panel-body p { font-size: 12px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -18,72 +18,131 @@
 <script src="/marketing-header.js"></script>
 
 <main class="mkt-main">
+  <div class="mkt-breadcrumb"><a href="/">Home</a><span class="sep">/</span><span>Integrations</span></div>
+
   <section class="mkt-hero">
     <div class="label-micro">Integrations</div>
     <h1>Connect Anthropic, OpenAI, and Google — nothing else required.</h1>
     <p class="lede">No CSV wrangling, no separate metering layer. camaze reads spend directly from each provider's own billing API using an admin key you connect once.</p>
-    <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+    <div class="mkt-cta-actions">
+      <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+      <a class="mkt-cta-secondary" href="#providers">See how it works ↓</a>
+    </div>
   </section>
 
-  <section class="mkt-section">
-    <div class="label-micro">Three real integrations, not a generic connector</div>
-    <h2>Each provider, read the way it actually reports cost</h2>
-    <div class="provider-list">
-      <div class="card">
-        <div class="panel-header">
-          <div class="provider-title">
-            <span class="p-swatch" style="background:var(--series-1)"></span>
-            <div class="panel-title">Anthropic</div>
+  <section class="mkt-tldr">
+    <div class="label-micro">The short version</div>
+    <p>Three real integrations, each read the way that provider actually reports cost. Keys are validated and encrypted, never shown again in full. Fixed subscriptions get entered once and stay split from metered usage.</p>
+  </section>
+
+  <section class="mkt-section-split" id="providers">
+    <div class="mkt-copy">
+      <div class="label-micro">Three real integrations, not a generic connector</div>
+      <h2>Each provider, read the way it actually reports cost</h2>
+      <a class="mkt-subcta" href="/login.html">Connect a provider →</a>
+    </div>
+    <div class="mkt-visual">
+      <div class="provider-list">
+        <div class="card">
+          <div class="panel-header">
+            <div class="provider-title">
+              <span class="p-swatch" style="background:var(--series-1)"></span>
+              <div class="panel-title">Anthropic</div>
+            </div>
+            <div class="panel-action"><span class="badge">Admin API</span></div>
           </div>
-          <div class="panel-action"><span class="badge">Admin API</span></div>
-        </div>
-        <div class="panel-body">
-          <p>Read via the Admin API's cost report endpoint — an organization Admin key, not a regular API key.</p>
-        </div>
-      </div>
-      <div class="card">
-        <div class="panel-header">
-          <div class="provider-title">
-            <span class="p-swatch" style="background:var(--series-2)"></span>
-            <div class="panel-title">OpenAI</div>
+          <div class="panel-body">
+            <p>Read via the Admin API's cost report endpoint — an organization Admin key, not a regular API key.</p>
           </div>
-          <div class="panel-action"><span class="badge">Costs API</span></div>
         </div>
-        <div class="panel-body">
-          <p>Read via the organization Costs API, using an Admin key from your OpenAI organization settings.</p>
-        </div>
-      </div>
-      <div class="card">
-        <div class="panel-header">
-          <div class="provider-title">
-            <span class="p-swatch" style="background:var(--series-3)"></span>
-            <div class="panel-title">Google</div>
+        <div class="card">
+          <div class="panel-header">
+            <div class="provider-title">
+              <span class="p-swatch" style="background:var(--series-2)"></span>
+              <div class="panel-title">OpenAI</div>
+            </div>
+            <div class="panel-action"><span class="badge">Costs API</span></div>
           </div>
-          <div class="panel-action"><span class="badge">BigQuery export</span></div>
+          <div class="panel-body">
+            <p>Read via the organization Costs API, using an Admin key from your OpenAI organization settings.</p>
+          </div>
         </div>
-        <div class="panel-body">
-          <p>Read from your BigQuery billing export — Google has no cost API, so camaze queries the export table your project already writes to.</p>
+        <div class="card">
+          <div class="panel-header">
+            <div class="provider-title">
+              <span class="p-swatch" style="background:var(--series-3)"></span>
+              <div class="panel-title">Google</div>
+            </div>
+            <div class="panel-action"><span class="badge">BigQuery export</span></div>
+          </div>
+          <div class="panel-body">
+            <p>Read from your BigQuery billing export — Google has no cost API, so camaze queries the export table your project already writes to.</p>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="mkt-section">
-    <div class="label-micro">Your keys</div>
-    <h2>Validated, encrypted, never round-tripped</h2>
-    <p class="lede">Each key is checked against the provider's own API before camaze saves it, then encrypted at rest. camaze never sends a saved key back to your browser in full — only a last-4 hint, so you can tell which one is connected without ever seeing it again. Connected keys are what power everything else on this site: cost data, alerts, forecasts, and attribution.</p>
+  <section class="mkt-section-split reverse">
+    <div class="mkt-copy">
+      <div class="label-micro">Your keys</div>
+      <h2>Validated, encrypted, never round-tripped</h2>
+      <p class="lede">Each key is checked against the provider's own API before camaze saves it, then encrypted at rest. camaze never sends a saved key back to your browser in full — only a last-4 hint. Connected keys are what power everything else on this site: cost data, alerts, forecasts, and attribution.</p>
+      <a class="mkt-subcta" href="/login.html">Add your keys →</a>
+    </div>
+    <div class="mkt-visual">
+      <div class="card">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Connected key</div>
+            <div class="panel-description">Example data — not your account.</div>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="mono" style="font-size:13px;">sk-ant-••••••••••••7f2a</div>
+          <div class="badge-row" style="margin-top:10px;">
+            <span class="badge badge-success">Verified</span>
+            <span class="badge badge-secondary">Encrypted at rest</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
 
-  <section class="mkt-section">
-    <div class="label-micro">Costs no API reports</div>
-    <h2>Fixed subscriptions, entered once</h2>
-    <p class="lede">Some AI spend never shows up in a usage API at all — a flat monthly seat license is the common case. camaze lets you record those directly, and keeps them split from metered usage everywhere: in the chart, in the total, and in the forecast, since a fixed cost can't spike the way usage can.</p>
+  <section class="mkt-section-split">
+    <div class="mkt-copy">
+      <div class="label-micro">Costs no API reports</div>
+      <h2>Fixed subscriptions, entered once</h2>
+      <p class="lede">Some AI spend never shows up in a usage API at all — a flat monthly seat license is the common case. camaze lets you record those directly, and keeps them split from metered usage everywhere: in the chart, in the total, and in the forecast.</p>
+      <a class="mkt-subcta" href="/login.html">Track a subscription →</a>
+    </div>
+    <div class="mkt-visual">
+      <div class="card">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Fixed costs</div>
+            <div class="panel-description">Example data — not your account.</div>
+          </div>
+        </div>
+        <div class="panel-body">
+          <table class="data-table">
+            <tbody>
+              <tr><td>ChatGPT Enterprise seat</td><td class="num">$30.00 / mo</td></tr>
+              <tr><td>Claude for Work, 12 seats</td><td class="num">$300.00 / mo</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </section>
 
   <section class="mkt-cta">
     <h2>Ready to see your own numbers?</h2>
     <p>Connect Anthropic, OpenAI, or Google in a couple minutes.</p>
-    <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+    <div class="mkt-cta-actions">
+      <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+      <a class="mkt-cta-secondary" href="/pricing">Questions about pricing? →</a>
+    </div>
   </section>
 </main>
 

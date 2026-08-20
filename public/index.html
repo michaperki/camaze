@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-site="marketing">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,34 +7,10 @@
 <meta name="description" content="camaze attributes AI spend to departments, people, and budgets — not just providers and models.">
 <link rel="stylesheet" href="/shared.css">
 <style>
-  .mock-section { padding: 0 0 8px; }
-  .mock-dashboard {
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 20px 20px 16px;
-  }
-  .mock-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
-  .mock-stat { background: var(--page); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; }
-  .mock-stat-label { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
-  .mock-stat-value {
-    font-size: 21px; font-weight: 600; font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums; margin-top: 4px;
-  }
-  .mock-stat-value.stat-warning { color: var(--warning); }
-  .mock-stat-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
-  .mock-budget-track { background: var(--grid); border-radius: 3px; height: 6px; margin-top: 9px; }
-  .mock-budget-bar { height: 100%; border-radius: 3px; background: var(--warning); }
-  .mock-legend { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; }
-  .mock-legend-item { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
-  .mock-legend-swatch { width: 9px; height: 9px; border-radius: 3px; flex: none; }
   #mock-chart svg { display: block; width: 100%; height: auto; }
-  .mock-caption { font-size: 12px; color: var(--text-muted); text-align: center; margin: 12px 0 0; }
 
   .keys-note { text-align: center; }
   .keys-note p { font-size: 13px; color: var(--text-secondary); max-width: 520px; margin: 0 auto; line-height: 1.5; }
-
-  @media (max-width: 700px) { .mock-stats { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -46,7 +22,15 @@
     <div class="label-micro">Attributed Intelligence</div>
     <h1>AI spend, attributed to the org chart — not just the API bill.</h1>
     <p class="lede">Every other AI cost tool is an engineering dashboard with a finance tab bolted on. camaze starts from departments, budgets, and people — the shape finance actually thinks in — and works backward to the API calls.</p>
-    <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+    <div class="mkt-cta-actions">
+      <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+      <a class="mkt-cta-secondary" href="#capabilities">See how it works ↓</a>
+    </div>
+  </section>
+
+  <section class="mkt-tldr">
+    <div class="label-micro">The short version</div>
+    <p>Connect your Anthropic, OpenAI, and Google keys once. camaze maps every dollar to a department and person, forecasts month-end spend, and alerts you the same day something spikes.</p>
   </section>
 
   <section class="mock-section">
@@ -79,7 +63,7 @@
     <p class="mock-caption">Example data — not your account.</p>
   </section>
 
-  <section class="mkt-section">
+  <section class="mkt-section" id="capabilities">
     <div class="label-micro">What camaze does</div>
     <h2>Six ways to see where AI spend actually goes</h2>
     <p class="lede">Each one is a real, working part of the product — not a roadmap.</p>
@@ -118,7 +102,10 @@
   <section class="mkt-cta">
     <h2>Ready to see your own numbers?</h2>
     <p>Connect Anthropic, OpenAI, or Google in a couple minutes.</p>
-    <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+    <div class="mkt-cta-actions">
+      <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+      <a class="mkt-cta-secondary" href="/pricing">Questions about pricing? →</a>
+    </div>
   </section>
 </main>
 

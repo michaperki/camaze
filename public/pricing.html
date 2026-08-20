@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-site="marketing">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,6 +12,8 @@
 <script src="/marketing-header.js"></script>
 
 <main class="mkt-main">
+  <div class="mkt-breadcrumb"><a href="/">Home</a><span class="sep">/</span><span>Pricing</span></div>
+
   <section class="mkt-hero">
     <div class="label-micro">Pricing</div>
     <h1>Pricing is still taking shape.</h1>
@@ -19,8 +21,52 @@
       <span class="badge badge-secondary">Free to connect</span>
       <span class="badge badge-secondary">No published plan yet</span>
     </div>
-    <p class="lede">camaze doesn't have a published price yet. It reads cost directly from your own Anthropic, OpenAI, and Google billing using your own keys, rather than reselling or metering usage through a separate plan — so what "pricing" even means here is still an open question we want to get right rather than guess at.</p>
-    <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+    <p class="lede">camaze doesn't have a published price yet. It reads cost directly from your own Anthropic, OpenAI, and Google billing using your own keys, rather than reselling or metering usage through a separate plan.</p>
+    <div class="mkt-cta-actions">
+      <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+      <a class="mkt-cta-secondary" href="#what-you-pay">What does it cost today? ↓</a>
+    </div>
+  </section>
+
+  <section class="mkt-tldr">
+    <div class="label-micro">The short version</div>
+    <p>You keep paying Anthropic, OpenAI, and Google directly, at their own rates. camaze doesn't resell or meter usage through a separate plan — what "pricing" even means here is still an open question we want to get right rather than guess at.</p>
+  </section>
+
+  <section class="mkt-section-split" id="what-you-pay">
+    <div class="mkt-copy">
+      <div class="label-micro">What you pay for</div>
+      <h2>Your provider bill, not a camaze markup</h2>
+      <p class="lede">camaze reads spend from your own keys — it doesn't sit between you and the provider as a reseller. There's no usage-based markup layered on top of what Anthropic, OpenAI, or Google already charge you.</p>
+      <a class="mkt-subcta" href="/integrations">See what connects →</a>
+    </div>
+    <div class="mkt-visual">
+      <div class="card">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">What costs money today</div>
+            <div class="panel-description">Example data — not your account.</div>
+          </div>
+        </div>
+        <div class="panel-body">
+          <table class="data-table">
+            <tbody>
+              <tr><td>Anthropic / OpenAI / Google bill</td><td class="num">Paid directly to them</td></tr>
+              <tr><td>camaze markup</td><td class="num">$0</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mkt-cta">
+    <h2>Ready to see your own numbers?</h2>
+    <p>Connect Anthropic, OpenAI, or Google in a couple minutes.</p>
+    <div class="mkt-cta-actions">
+      <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+      <a class="mkt-cta-secondary" href="/integrations">See what connects →</a>
+    </div>
   </section>
 </main>
 
