@@ -16,7 +16,6 @@
     { href: "/dashboard.html", label: "Dashboard" },
     { href: "/integrations.html", label: "Integrations" },
     { href: "/notifications.html", label: "Notifications" },
-    { href: "/gateway.html", label: "Gateway" },
     { href: "/assignments.html", label: "Assignments" },
   ];
 

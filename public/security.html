@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en" data-site="marketing">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>camaze — Security</title>
+<meta name="description" content="How camaze protects provider credentials and customer data: read-only access, encryption, tenant isolation, and audit logging.">
+<link rel="stylesheet" href="/shared.css">
+<style>
+  .check-list { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
+  .check-list li { font-size: 13px; color: var(--text-secondary); line-height: 1.55; }
+  .audit-example .data-table td { font-size: 12px; }
+</style>
+</head>
+<body>
+<header id="app-header"></header>
+<script src="/marketing-header.js"></script>
+
+<main class="mkt-main">
+  <div class="mkt-breadcrumb"><a href="/">Home</a><span class="sep">/</span><span>Security</span></div>
+
+  <section class="mkt-hero">
+    <div class="label-micro">Security</div>
+    <h1>Read-only by design.</h1>
+    <p class="lede">camaze reads billing and usage data from the providers you connect. It has no code path to create, modify, or delete anything in a connected provider account — and every security-relevant action taken inside camaze itself is logged.</p>
+    <div class="mkt-cta-actions">
+      <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+      <a class="mkt-cta-secondary" href="#access">See how it works ↓</a>
+    </div>
+  </section>
+
+  <section class="mkt-tldr">
+    <div class="label-micro">The short version</div>
+    <p>Read-only provider access. AES-256-GCM encryption of credentials at rest. TLS in transit. Row-level security for tenant isolation. Provider keys are never returned to the browser in full. Every security-relevant account change is recorded in an append-only audit log.</p>
+  </section>
+
+  <section class="mkt-section-split" id="access">
+    <div class="mkt-copy">
+      <div class="label-micro">Provider access</div>
+      <h2>camaze only reads.</h2>
+      <p class="lede">Each connected key is used exclusively to call that provider's own billing or usage-reporting endpoint — Anthropic's cost report, OpenAI's Costs API, Google's BigQuery billing export. There is no request path anywhere in camaze that writes to a provider account.</p>
+    </div>
+    <div class="mkt-visual">
+      <div class="card">
+        <div class="panel-header">
+          <div class="panel-title">What each key is used for</div>
+          <div class="panel-action"><span class="badge badge-success">Read-only</span></div>
+        </div>
+        <div class="panel-body">
+          <table class="data-table">
+            <tbody>
+              <tr><td>Anthropic</td><td>Admin API — cost report</td></tr>
+              <tr><td>OpenAI</td><td>Admin API — Costs API</td></tr>
+              <tr><td>Google</td><td>BigQuery billing export</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mkt-section-split reverse">
+    <div class="mkt-copy">
+      <div class="label-micro">Encryption</div>
+      <h2>AES-256-GCM at rest, TLS in transit.</h2>
+      <p class="lede">Provider credentials are encrypted with AES-256-GCM before they're stored, using a key that lives only in camaze's server environment — never alongside the ciphertext it protects. Every connection to camaze, and every connection camaze makes onward to Supabase or a provider's API, is TLS-encrypted.</p>
+    </div>
+    <div class="mkt-visual">
+      <div class="card">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Stored credential</div>
+            <div class="panel-description">Example data — not your account.</div>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="mono" style="font-size:13px;">sk-ant-••••••••••••7f2a</div>
+          <div class="badge-row" style="margin-top:10px;">
+            <span class="badge badge-secondary">AES-256-GCM</span>
+            <span class="badge badge-secondary">TLS in transit</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mkt-section-split">
+    <div class="mkt-copy">
+      <div class="label-micro">Tenant isolation</div>
+      <h2>Every query scoped to one account, twice over.</h2>
+      <p class="lede">Every server-side query is explicitly scoped to the requesting user's account. Postgres row-level security policies enforce the same boundary independently at the database level, so a bug in application-level scoping isn't the only thing standing between one customer's data and another's.</p>
+    </div>
+    <div class="mkt-visual">
+      <div class="card">
+        <div class="panel-header">
+          <div class="panel-title">Two independent boundaries</div>
+        </div>
+        <div class="panel-body">
+          <ul class="check-list">
+            <li>Application layer — every query is scoped to the caller's account before it runs.</li>
+            <li>Database layer — row-level security policies enforce the same scoping independently.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mkt-section-split reverse">
+    <div class="mkt-copy">
+      <div class="label-micro">Audit logging</div>
+      <h2>Every change, logged — and it stays that way.</h2>
+      <p class="lede">Connecting or removing a provider key, changing a budget, editing departments and people, reassigning attribution, changing notification settings, signing in — each is recorded with who, what, and when. The log is append-only: there is no code path to edit or delete an entry, and the database itself rejects any attempt to alter one, including from camaze's own server credentials.</p>
+    </div>
+    <div class="mkt-visual">
+      <div class="card audit-example">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Audit log</div>
+            <div class="panel-description">Example data — not your account.</div>
+          </div>
+        </div>
+        <div class="panel-body">
+          <table class="data-table">
+            <thead>
+              <tr><th>Action</th><th>Detail</th><th>When</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>provider_key.connected</td><td>anthropic · ••7f2a</td><td class="num">2d ago</td></tr>
+              <tr><td>budget.changed</td><td>$4,000 → $5,000</td><td class="num">5d ago</td></tr>
+              <tr><td>auth.signed_in</td><td>google</td><td class="num">just now</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mkt-section">
+    <div class="label-micro">In plain terms</div>
+    <h2>What camaze can and cannot do</h2>
+    <div class="mkt-grid">
+      <div class="card">
+        <div class="panel-header">
+          <div class="panel-title">Can</div>
+          <div class="panel-action"><span class="badge badge-success">Read</span></div>
+        </div>
+        <div class="panel-body">
+          <ul class="check-list">
+            <li>Read billing and usage data from Anthropic, OpenAI, and Google using the credential you provide.</li>
+            <li>Store that credential, encrypted, so it can keep reading on a schedule.</li>
+            <li>Log the security-relevant actions taken inside camaze itself.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card">
+        <div class="panel-header">
+          <div class="panel-title">Cannot</div>
+          <div class="panel-action"><span class="badge badge-secondary">No write access</span></div>
+        </div>
+        <div class="panel-body">
+          <ul class="check-list">
+            <li>Create, modify, or delete anything in a connected provider account.</li>
+            <li>Make API calls, spend money, or consume quota on your behalf with a connected key.</li>
+            <li>Rotate, revoke, or otherwise change a key at the provider — only within camaze.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mkt-cta">
+    <h2>Ready to see your own numbers?</h2>
+    <p>Connect Anthropic, OpenAI, or Google in a couple minutes.</p>
+    <div class="mkt-cta-actions">
+      <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
+      <a class="mkt-cta-secondary" href="/integrations">See how integrations work →</a>
+    </div>
+  </section>
+</main>
+
+<footer id="site-footer"></footer>
+</body>
+</html>

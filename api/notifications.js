@@ -10,6 +10,7 @@ const {
   getUserSettings, upsertUserSettings,
 } = require("../lib/supabase");
 const { BUDGET_DEFAULT_THRESHOLD_PCT } = require("../lib/alerts");
+const { logAudit } = require("../lib/audit");
 
 const DEFAULT_DIGEST_HOUR = 9;
 
@@ -44,6 +45,14 @@ async function handlePost(req, res, user) {
   await upsertNotificationSettings(user.id, digestEnabled, digestHour, spikeAlertsEnabled, budgetAlertsEnabled);
 
   const responseBody = { ok: true, digestEnabled, digestHour, spikeAlertsEnabled, budgetAlertsEnabled };
+  // Only the fields actually present in this request, not the merged
+  // result — that's what changed, which is what the audit entry should
+  // reflect.
+  const changed = {};
+  if (body.digestEnabled !== undefined) changed.digestEnabled = digestEnabled;
+  if (body.digestHour !== undefined) changed.digestHour = digestHour;
+  if (body.spikeAlertsEnabled !== undefined) changed.spikeAlertsEnabled = spikeAlertsEnabled;
+  if (body.budgetAlertsEnabled !== undefined) changed.budgetAlertsEnabled = budgetAlertsEnabled;
 
   if (body.alertThreshold !== undefined) {
     const alertThreshold = Number(body.alertThreshold);
@@ -54,8 +63,10 @@ async function handlePost(req, res, user) {
     const userSettings = await getUserSettings(user.id);
     await upsertUserSettings(user.id, userSettings?.monthly_budget ?? null, alertThreshold);
     responseBody.alertThreshold = alertThreshold;
+    changed.alertThreshold = alertThreshold;
   }
 
+  await logAudit(req, user, "notification_settings.changed", changed, "api/notifications.js");
   res.status(200).json(responseBody);
 }
 

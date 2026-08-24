@@ -2,7 +2,7 @@
 // <header id="app-header"></header> / <footer id="site-footer"></footer>
 // mounts. Separate from header.js and its nav on purpose — a logged-out
 // visitor on a marketing page should see Attribution/Alerts/Planning/
-// Reports/Integrations/Pricing, never Dashboard/Gateway/Assignments.
+// Reports/Integrations/Pricing, never Dashboard/Assignments.
 // Reuses the app header's own CSS (#app-header/.header-inner/.wordmark/
 // nav.tabs in shared.css) so the two feel like one site, not two.
 (function () {
@@ -44,7 +44,7 @@
     mount.innerHTML =
       '<div class="footer-inner">' +
       '<span>camaze</span>' +
-      '<nav><a href="/pricing">Pricing</a><a href="/login.html">Sign in</a></nav>' +
+      '<nav><a href="/pricing">Pricing</a><a href="/security">Security</a><a href="/login.html">Sign in</a></nav>' +
       "</div>";
   }
 

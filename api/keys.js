@@ -7,6 +7,7 @@ const {
   upsertProviderKey,
   deleteProviderKey,
 } = require("../lib/supabase");
+const { logAudit } = require("../lib/audit");
 
 const providers = {
   anthropic: require("../providers/anthropic"),
@@ -35,7 +36,13 @@ async function handlePost(req, res, user) {
     return;
   }
 
+  // Checked before the write so the audit entry can distinguish a first
+  // connection from a credential rotation on an already-connected provider.
+  const existing = await listProviderKeys(user.id);
+  const wasConnected = existing.some((r) => r.provider === provider);
+
   try {
+    let hint;
     if (provider === "google") {
       const { serviceAccountJson, project, dataset } = body;
       if (!serviceAccountJson || !project) {
@@ -44,7 +51,8 @@ async function handlePost(req, res, user) {
       }
       await providers.google.validateConfig({ serviceAccountJson, project, dataset });
       const payload = JSON.stringify({ serviceAccountJson, project, dataset: dataset || "billing_export" });
-      await upsertProviderKey(user.id, "google", cryptoLib.encrypt(payload), project);
+      hint = project;
+      await upsertProviderKey(user.id, "google", cryptoLib.encrypt(payload), hint);
     } else {
       const { key } = body;
       if (!key) {
@@ -52,8 +60,15 @@ async function handlePost(req, res, user) {
         return;
       }
       await providers[provider].validateKey(key);
-      await upsertProviderKey(user.id, provider, cryptoLib.encrypt(key), keyHint(key));
+      hint = keyHint(key);
+      await upsertProviderKey(user.id, provider, cryptoLib.encrypt(key), hint);
     }
+    await logAudit(
+      req, user,
+      wasConnected ? "provider_key.updated" : "provider_key.connected",
+      { provider, hint },
+      "api/keys.js"
+    );
     res.status(200).json({ ok: true });
   } catch (err) {
     // Validation failures and malformed input are the caller's to fix.
@@ -68,6 +83,7 @@ async function handleDelete(req, res, user) {
     return;
   }
   await deleteProviderKey(user.id, provider);
+  await logAudit(req, user, "provider_key.removed", { provider }, "api/keys.js");
   res.status(200).json({ ok: true });
 }
 

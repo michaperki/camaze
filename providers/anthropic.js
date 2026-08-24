@@ -219,11 +219,11 @@ async function fetchWorkspaceCosts(start, end, key) {
 // the key's `unpriced` bucket (raw token counts, no dollar figure) instead
 // of being silently priced at $0 and vanishing. See lib/pricing.js.
 //
-// Awaits the LiteLLM price load once, up front — unlike the gateway's
-// request-time estimateCost, this call is already making several sequential
-// admin-API round trips, so paying for one more (Supabase, or occasionally
-// a GitHub fetch) here is cheap, and it means the very first dashboard load
-// on a cold container gets current prices instead of overrides-only.
+// Awaits the LiteLLM price load once, up front — this call is already
+// making several sequential admin-API round trips, so paying for one more
+// (Supabase, or occasionally a GitHub fetch) here is cheap, and it means
+// the very first dashboard load on a cold container gets current prices
+// instead of overrides-only.
 async function fetchApiKeyUsageEstimate(start, end, key) {
   await ensurePricesLoaded();
 

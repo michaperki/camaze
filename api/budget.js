@@ -2,6 +2,7 @@
 // carry a valid Supabase JWT — verified server-side before anything else,
 // same pattern as api/keys.js.
 const { verifyUser, getUserSettings, upsertUserSettings } = require("../lib/supabase");
+const { logAudit } = require("../lib/audit");
 
 async function handleGet(user, res) {
   const settings = await getUserSettings(user.id);
@@ -15,12 +16,16 @@ async function handlePost(req, res, user) {
     res.status(400).json({ error: "budget must be a non-negative number" });
     return;
   }
+  const previous = await getUserSettings(user.id);
   await upsertUserSettings(user.id, budget);
+  await logAudit(req, user, "budget.changed", { from: previous?.monthly_budget ?? null, to: budget }, "api/budget.js");
   res.status(200).json({ ok: true, budget });
 }
 
-async function handleDelete(user, res) {
+async function handleDelete(req, res, user) {
+  const previous = await getUserSettings(user.id);
   await upsertUserSettings(user.id, null);
+  await logAudit(req, user, "budget.changed", { from: previous?.monthly_budget ?? null, to: null }, "api/budget.js");
   res.status(200).json({ ok: true });
 }
 
@@ -34,7 +39,7 @@ module.exports = async (req, res) => {
   try {
     if (req.method === "GET") return await handleGet(user, res);
     if (req.method === "POST") return await handlePost(req, res, user);
-    if (req.method === "DELETE") return await handleDelete(user, res);
+    if (req.method === "DELETE") return await handleDelete(req, res, user);
     res.status(405).json({ error: "Method not allowed" });
   } catch (err) {
     res.status(500).json({ error: err.message });

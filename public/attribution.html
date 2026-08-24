@@ -17,7 +17,7 @@
   <section class="mkt-hero">
     <div class="label-micro">Attribution &amp; cost centers</div>
     <h1>Every dollar, assigned to a department and a person.</h1>
-    <p class="lede">Billing exports tell you which key spent money. They don't tell you which team it belongs to. camaze closes that gap in two ways — one for the spend you already have, one for the spend as it happens.</p>
+    <p class="lede">Billing exports tell you which key spent money. They don't tell you which team it belongs to. camaze closes that gap by mapping every key, workspace, and project you connect to a department and a person.</p>
     <div class="mkt-cta-actions">
       <a class="btn btn-primary btn-lg" href="/login.html">Get started</a>
       <a class="mkt-cta-secondary" href="#cost-centers">See how it works ↓</a>
@@ -26,7 +26,7 @@
 
   <section class="mkt-tldr">
     <div class="label-micro">The short version</div>
-    <p>Every key, workspace, and project you connect gets mapped to a department and person. For live traffic, camaze's gateway attributes cost at the individual request — not just the monthly total.</p>
+    <p>Every key, workspace, and project you connect gets mapped to a department and person, so you can see cost per team and per employee, not just a monthly total.</p>
   </section>
 
   <section class="mkt-section-split" id="cost-centers">
@@ -61,36 +61,6 @@
     </div>
   </section>
 
-  <section class="mkt-section-split reverse">
-    <div class="mkt-copy">
-      <div class="label-micro">Attributed Intelligence</div>
-      <h2>Attribute at the request, not just the invoice</h2>
-      <p class="lede">A billing export can only tell you what a key spent in total. camaze's gateway sits in the request path instead: point your app at camaze with a camaze-issued key rather than your provider's, and every call is forwarded to the real provider, streamed back byte for byte, and logged for cost afterward.</p>
-      <p class="lede" style="font-size:12px">Each gateway key is scoped to one provider and can be revoked at any time — nothing is buffered before it reaches your app, so a slow client only slows itself down.</p>
-      <a class="mkt-subcta" href="/login.html">Try it with your own key →</a>
-    </div>
-    <div class="mkt-visual">
-      <div class="card">
-        <div class="panel-header">
-          <div>
-            <div class="panel-title">Gateway request</div>
-            <div class="panel-description">What happens when your app calls camaze instead of the provider directly.</div>
-          </div>
-          <div class="panel-action">
-            <button type="button" class="btn btn-ghost btn-icon btn-sm" id="copy-gw" title="Copy" aria-label="Copy request example">⧉</button>
-          </div>
-        </div>
-        <div class="panel-body">
-          <div class="mkt-code-block" id="gw-code-text">POST https://your-app.example.com
-Authorization: Bearer cz-live-...
-
-  ↓ forwarded to api.anthropic.com, streamed back unchanged
-  ↓ cost logged against the gateway key that made the call</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
   <section class="mkt-cta">
     <h2>Ready to see your own numbers?</h2>
     <p>Connect Anthropic, OpenAI, or Google in a couple minutes.</p>
@@ -102,17 +72,5 @@ Authorization: Bearer cz-live-...
 </main>
 
 <footer id="site-footer"></footer>
-<script>
-document.getElementById("copy-gw").addEventListener("click", async (e) => {
-  const text = document.getElementById("gw-code-text").innerText;
-  try {
-    await navigator.clipboard.writeText(text);
-    const btn = e.currentTarget;
-    const original = btn.textContent;
-    btn.textContent = "✓";
-    setTimeout(() => { btn.textContent = original; }, 1200);
-  } catch { /* clipboard permission denied — no-op */ }
-});
-</script>
 </body>
 </html>

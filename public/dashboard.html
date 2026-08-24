@@ -1306,6 +1306,19 @@ function prefetchMonth(accessToken, sel) {
 
   const client = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
 
+  // Registered before getSession() so it catches SIGNED_IN if the OAuth/
+  // magic-link exchange below fires it — that event means an actual new
+  // sign-in (as opposed to INITIAL_SESSION, which fires on every page load
+  // that restores a session from local storage), so it's the one place to
+  // log the audit event without double-logging on every dashboard visit.
+  client.auth.onAuthStateChange((event, signedInSession) => {
+    if (event !== "SIGNED_IN") return;
+    fetch("/api/audit-signin", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${signedInSession.access_token}` },
+    }).catch(() => {});
+  });
+
   // Also exchanges an OAuth code in the URL for a session, if present.
   const { data: { session } } = await client.auth.getSession();
   if (!session) {

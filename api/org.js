@@ -10,6 +10,7 @@ const {
   assignEntity, deleteEntityAssignment, listDiscoveredEntities,
 } = require("../lib/org");
 const { verifyUser } = require("../lib/supabase");
+const { logAudit } = require("../lib/audit");
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
@@ -55,7 +56,9 @@ async function handleDepartments(req, res, user, body) {
   if (req.method === "POST") {
     const error = validateDepartmentFields(body, true);
     if (error) return res.status(400).json({ error });
-    res.status(200).json({ ok: true, department: await createDepartment(user.id, pickDepartmentFields(body)) });
+    const department = await createDepartment(user.id, pickDepartmentFields(body));
+    await logAudit(req, user, "department.created", { id: department.id, fields: pickDepartmentFields(body) }, "api/org.js");
+    res.status(200).json({ ok: true, department });
     return;
   }
   if (req.method === "PATCH") {
@@ -66,6 +69,7 @@ async function handleDepartments(req, res, user, body) {
     if (Object.keys(fields).length === 0) return res.status(400).json({ error: "No fields to update" });
     const row = await updateDepartment(user.id, body.id, fields);
     if (!row) return res.status(404).json({ error: "Not found" });
+    await logAudit(req, user, "department.updated", { id: body.id, fields }, "api/org.js");
     res.status(200).json({ ok: true, department: row });
     return;
   }
@@ -73,6 +77,7 @@ async function handleDepartments(req, res, user, body) {
     const id = req.query?.id;
     if (!id) return res.status(400).json({ error: "id is required" });
     await deleteDepartment(user.id, id);
+    await logAudit(req, user, "department.deleted", { id }, "api/org.js");
     res.status(200).json({ ok: true });
     return;
   }
@@ -112,7 +117,9 @@ async function handlePeople(req, res, user, body) {
   if (req.method === "POST") {
     const error = validatePersonFields(body, true);
     if (error) return res.status(400).json({ error });
-    res.status(200).json({ ok: true, person: await createPerson(user.id, pickPersonFields(body)) });
+    const person = await createPerson(user.id, pickPersonFields(body));
+    await logAudit(req, user, "person.created", { id: person.id, fields: pickPersonFields(body) }, "api/org.js");
+    res.status(200).json({ ok: true, person });
     return;
   }
   if (req.method === "PATCH") {
@@ -123,6 +130,7 @@ async function handlePeople(req, res, user, body) {
     if (Object.keys(fields).length === 0) return res.status(400).json({ error: "No fields to update" });
     const row = await updatePerson(user.id, body.id, fields);
     if (!row) return res.status(404).json({ error: "Not found" });
+    await logAudit(req, user, "person.updated", { id: body.id, fields }, "api/org.js");
     res.status(200).json({ ok: true, person: row });
     return;
   }
@@ -130,6 +138,7 @@ async function handlePeople(req, res, user, body) {
     const id = req.query?.id;
     if (!id) return res.status(400).json({ error: "id is required" });
     await deletePerson(user.id, id);
+    await logAudit(req, user, "person.deleted", { id }, "api/org.js");
     res.status(200).json({ ok: true });
     return;
   }
@@ -144,11 +153,19 @@ async function handleAssignments(req, res, user, body) {
     if (typeof provider !== "string" || !provider) return res.status(400).json({ error: "provider is required" });
     if (typeof scope !== "string" || !scope) return res.status(400).json({ error: "scope is required" });
     if (typeof entityId !== "string" || !entityId) return res.status(400).json({ error: "entity_id is required" });
-    const assignment = await assignEntity(user.id, {
+    const departmentId = body.department_id || null;
+    const personId = body.person_id || null;
+    const { assignment, reassigned } = await assignEntity(user.id, {
       provider, scope, entity_id: entityId,
-      department_id: body.department_id || null,
-      person_id: body.person_id || null,
+      department_id: departmentId,
+      person_id: personId,
     });
+    await logAudit(
+      req, user,
+      reassigned ? "assignment.changed" : "assignment.created",
+      { id: assignment.id, provider, scope, entity_id: entityId, department_id: departmentId, person_id: personId },
+      "api/org.js"
+    );
     res.status(200).json({ ok: true, assignment });
     return;
   }
@@ -156,6 +173,7 @@ async function handleAssignments(req, res, user, body) {
     const id = req.query?.id;
     if (!id) return res.status(400).json({ error: "id is required" });
     await deleteEntityAssignment(user.id, id);
+    await logAudit(req, user, "assignment.deleted", { id }, "api/org.js");
     res.status(200).json({ ok: true });
     return;
   }
