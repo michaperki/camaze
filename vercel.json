@@ -2,14 +2,7 @@
   "framework": null,
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/attribution", "destination": "/attribution.html" },
-    { "source": "/alerts", "destination": "/alerts.html" },
-    { "source": "/planning", "destination": "/planning.html" },
-    { "source": "/reports", "destination": "/reports.html" },
-    { "source": "/integrations", "destination": "/integrations-overview.html" },
-    { "source": "/pricing", "destination": "/pricing.html" },
-    { "source": "/security", "destination": "/security.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/", "destination": "/dashboard.html" }
   ],
   "crons": [
     { "path": "/api/cron/cost-sync", "schedule": "*/15 * * * *" },
