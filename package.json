@@ -4,6 +4,7 @@
   "private": true,
   "description": "Minimal Anthropic spend tracker — daily cost for the last 30 days",
   "scripts": {
-    "dev": "vercel dev"
+    "dev": "vercel dev",
+    "test": "node --test test/*.test.js"
   }
 }
