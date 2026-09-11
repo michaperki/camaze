@@ -14,6 +14,7 @@
 (function () {
   const NAV = [
     { href: "/dashboard.html", label: "Dashboard" },
+    { href: "/insights.html", label: "Insights" },
     { href: "/integrations.html", label: "Integrations" },
     { href: "/notifications.html", label: "Notifications" },
     { href: "/assignments.html", label: "Assignments" },

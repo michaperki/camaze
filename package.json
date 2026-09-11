@@ -5,6 +5,12 @@
   "description": "Minimal Anthropic spend tracker — daily cost for the last 30 days",
   "scripts": {
     "dev": "vercel dev",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "dev:insights": "node scripts/insights-preview.js",
+    "inspect:insights-source": "node scripts/inspect-insights-source.js",
+    "test:insights-ui": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
   }
 }
