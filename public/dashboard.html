@@ -295,13 +295,21 @@
     color: var(--text-primary);
   }
   /* Sim day/month advances (and month navigation) re-render these bars and
-     headline numbers rather than the page reloading — animate the change
-     instead of snapping, so it's a "watch it move" comparison rather than a
-     "remember what it said before" one. The static `width: var(--bar-target)`
-     is the real source of truth (and the whole story under reduced motion);
-     the animation just plays through it on the way to the same value. */
+     headline numbers rather than the page reloading. Every render rebuilds
+     this markup from scratch (fresh DOM nodes every time), so animating
+     unconditionally on every re-render would make every bar flash on every
+     tick even when its value didn't move — the "pulsating" look. Instead,
+     each render() function below computes whether a given row/day's value
+     actually changed since the *previous* render and only then adds
+     .bar-changed — an unchanged bar gets no animation at all and simply
+     sits at its already-correct resting state (identical to how it'd look
+     mid-transition-completed), so only the genuinely new/changed bars
+     visibly move. The static `width: var(--bar-target)` is the real source
+     of truth (and the whole story under reduced motion) either way. */
   .model-bar, .budget-bar {
     width: var(--bar-target, 0%);
+  }
+  .model-bar.bar-changed, .budget-bar.bar-changed {
     animation: sim-bar-grow 0.5s cubic-bezier(.22, .9, .32, 1) both;
   }
   @keyframes sim-bar-grow {
@@ -310,17 +318,20 @@
   }
   /* Each day's stacked-bar shapes share one <g> (see the chart's render())
      so the whole day can scale up from the baseline it already sits on —
-     fill-box/bottom origin needs no coordinate math per bar. */
+     fill-box/bottom origin needs no coordinate math per bar. Only the
+     day(s) whose totals actually changed get .bar-changed. */
   .chart-bar-group {
     transform-box: fill-box;
     transform-origin: bottom;
+  }
+  .chart-bar-group.bar-changed {
     animation: sim-chart-bar-grow 0.5s cubic-bezier(.22, .9, .32, 1) both;
   }
   @keyframes sim-chart-bar-grow {
     from { transform: scaleY(0); }
     to { transform: scaleY(1); }
   }
-  .chart-bar-total {
+  .chart-bar-total.bar-changed {
     animation: sim-fade-in 0.3s ease 0.32s both;
   }
   @keyframes sim-fade-in {
@@ -328,7 +339,7 @@
     to { opacity: 1; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .model-bar, .budget-bar, .chart-bar-group, .chart-bar-total { animation: none; }
+    .model-bar.bar-changed, .budget-bar.bar-changed, .chart-bar-group.bar-changed, .chart-bar-total.bar-changed { animation: none; }
   }
 </style>
 </head>
@@ -492,6 +503,22 @@ function animateNumber(el, to, fmt, from) {
 let prevChartTotal = null;
 let prevSummary = { mtd: null, forecast: null, budget: null };
 
+// Value-change tracking for the breakdown bars (models/attribution/
+// departments/top spenders) — see the .bar-changed comment in <style>
+// above. Every render() function below rebuilds its rows' markup from
+// scratch on every call (a sim tick, a month-nav click, ...), so without
+// this a single row changing would replay the grow-in animation on every
+// row. `previous` must be captured from the render's own last-render cache
+// (e.g. lastModels) *before* that cache is overwritten with the new data.
+function previousAmounts(rows, keyFn) {
+  const m = new Map();
+  for (const r of rows || []) m.set(keyFn(r), r.amount_usd);
+  return m;
+}
+function amountChanged(previous, key, amount) {
+  return !previous.has(key) || previous.get(key) !== amount;
+}
+
 function fmtAgo(iso) {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins <= 0) return "just now";
@@ -502,10 +529,19 @@ function fmtAgo(iso) {
   return days === 1 ? "1 day ago" : `${days} days ago`;
 }
 
+// Previous render's per-day, per-active-provider values, keyed by date —
+// read by render() below to decide which day(s) actually changed since the
+// last paint (a day advance only changes the newly-filled-in day; a spike
+// can retroactively change "today" before it's advanced). Reset to null
+// whenever there's no chart on screen to diff against.
+let lastChartDays = null;
+let lastChartActiveKey = null;
+
 function render({ providers, days, totals, errors, cached, cachedAt }) {
   const content = document.getElementById("content");
   const description = document.getElementById("chart-description");
   const active = providers.filter(p => !p.failed);
+  const activeKey = active.map(p => p.name).join(",");
 
   // Per-provider failure notes (shown above the chart, plainly).
   let notes = "";
@@ -521,6 +557,8 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
     content.innerHTML = `<div class="notes">${notes}</div>` +
       '<div class="message">No provider data could be loaded.</div>';
     prevChartTotal = null;
+    lastChartDays = null;
+    lastChartActiveKey = null;
     return;
   }
 
@@ -549,7 +587,21 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
 
   if (days.every(d => active.every(p => d[p.name] === 0))) {
     content.innerHTML = topContent + '<div class="message">No spend recorded in this period.</div>' + legendHtml;
+    lastChartDays = null;
+    lastChartActiveKey = null;
     return;
+  }
+
+  // A day's bars only animate if its value (for every currently-active
+  // provider) actually differs from the last render — see lastChartDays
+  // above. A provider set change (one just failed/recovered) is treated as
+  // "everything changed" rather than risking a stale comparison.
+  const chartHasComparableHistory = lastChartActiveKey === activeKey && !!lastChartDays;
+  function dayChanged(d) {
+    if (!chartHasComparableHistory) return true;
+    const prev = lastChartDays.get(d.date);
+    if (!prev) return true;
+    return active.some(p => prev[p.name] !== d[p.name]);
   }
 
   const W = 920, H = 210;
@@ -598,10 +650,13 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
     const segs = active
       .map(p => ({ name: p.name, usd: d[p.name] }))
       .filter(seg => seg.usd > 0);
+    const changed = dayChanged(d);
     // Grouped so the whole day's shapes can grow up from the baseline as
     // one unit (see .chart-bar-group's animation) — the bar-total label
     // below stays outside the group so scaling the bar never squishes it.
-    s += '<g class="chart-bar-group">';
+    // Only a day whose value actually moved since the last render gets
+    // .bar-changed; the rest render at rest, with no animation replay.
+    s += `<g class="chart-bar-group${changed ? " bar-changed" : ""}">`;
     if (segs.length === 0) {
       s += `<rect x="${x}" y="${baseline - 0.5}" width="${barW}" height="1" fill="var(--text-muted)" opacity="0.5"/>`;
       s += '</g>';
@@ -629,9 +684,14 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
     const total = dayTotal(d);
     if (total > 0 && (total === maxDayTotal || total >= barLabelThreshold)) {
       const cx = x + barW / 2;
-      s += `<text class="chart-bar-total" x="${cx}" y="${y(total) - 6}" text-anchor="middle">$${Math.round(total).toLocaleString("en-US")}</text>`;
+      s += `<text class="chart-bar-total${changed ? " bar-changed" : ""}" x="${cx}" y="${y(total) - 6}" text-anchor="middle">$${Math.round(total).toLocaleString("en-US")}</text>`;
     }
   });
+
+  // Snapshot this render's values so the *next* render can tell which
+  // day(s) changed — read as lastChartDays/lastChartActiveKey above.
+  lastChartDays = new Map(days.map(d => [d.date, Object.fromEntries(active.map(p => [p.name, d[p.name]]))]));
+  lastChartActiveKey = activeKey;
 
   days.forEach((d, i) => {
     if (i % labelStride !== 0 && i !== days.length - 1) return;
@@ -725,6 +785,7 @@ let lastModels = [];
 let lastAttribution = [];
 
 function renderModels(models) {
+  const previous = previousAmounts(lastModels, m => `${m.provider}|${m.model}`);
   lastModels = models || [];
   updateBreakdownCardVisibility();
   if (lastModels.length === 0) {
@@ -743,11 +804,12 @@ function renderModels(models) {
     const shareLabel = share > 0 && share < 1 ? share.toFixed(1) : Math.round(share);
     const fill = SERIES_VARS[m.provider] || "var(--text-muted)";
     const label = prettifyModel(m.provider, m.model);
+    const barClass = "model-bar" + (amountChanged(previous, `${m.provider}|${m.model}`, m.amount_usd) ? " bar-changed" : "");
     return (
       '<div class="model-row">' +
       `<span class="model-label" title="${esc(m.model)}">${esc(label)}</span>` +
       '<div class="model-bar-track">' +
-      (pct > 0 ? `<div class="model-bar" style="--bar-target:${pct}%;background:${fill}"></div>` : "") +
+      (pct > 0 ? `<div class="${barClass}" style="--bar-target:${pct}%;background:${fill}"></div>` : "") +
       "</div>" +
       '<span class="model-stats">' +
       `<span class="model-pct">${shareLabel}%</span>` +
@@ -769,6 +831,7 @@ const PROVIDER_ORDER = ["anthropic", "openai", "google"];
 
 function renderAttribution(attribution) {
   const unpricedNote = document.getElementById("attribution-unpriced-note");
+  const previous = previousAmounts(lastAttribution, a => `${a.provider}|${a.scope}|${a.name}`);
   lastAttribution = attribution || [];
   updateBreakdownCardVisibility();
   if (lastAttribution.length === 0) {
@@ -827,11 +890,12 @@ function renderAttribution(attribution) {
       const unpricedBadge = a.unpriced
         ? ` <span class="badge badge-warning" title="${esc((a.unpricedModels || []).join(', '))}">unpriced</span>`
         : "";
+      const barClass = "model-bar" + (amountChanged(previous, `${a.provider}|${a.scope}|${a.name}`, a.amount_usd) ? " bar-changed" : "");
       return (
         '<div class="model-row">' +
         `<span class="model-label" title="${esc(a.name)}">${esc(a.name)}</span>` +
         '<div class="model-bar-track">' +
-        (pct > 0 ? `<div class="model-bar" style="--bar-target:${pct}%;background:${fill}"></div>` : "") +
+        (pct > 0 ? `<div class="${barClass}" style="--bar-target:${pct}%;background:${fill}"></div>` : "") +
         "</div>" +
         '<span class="model-stats">' +
         `<span class="model-amount">${fmtUSD(a.amount_usd)}${estBadge}${unpricedBadge}</span>` +
@@ -855,6 +919,7 @@ function renderAttribution(attribution) {
 let lastDepartments = [];
 
 function renderDepartmentBreakdown(attribution) {
+  const previous = previousAmounts(lastDepartments, d => d.department.id ?? "unassigned");
   const groups = new Map(); // department id ("unassigned" for null) -> { department, amount_usd }
   for (const row of attribution || []) {
     const dept = row.department || UNASSIGNED_DEPT;
@@ -897,12 +962,13 @@ function renderDepartmentBreakdown(attribution) {
       ? ` <span class="badge badge-warning" title="Spend from keys/projects with no department or owner set — assign them on the Assignments page">unassigned</span>`
       : "";
     const amountClass = "model-amount" + (status ? ` stat-${status}` : "");
+    const barClass = "model-bar" + (amountChanged(previous, d.department.id ?? "unassigned", d.amount_usd) ? " bar-changed" : "");
 
     return (
       '<div class="model-row">' +
       `<span class="model-label" title="${esc(d.department.name)}">${esc(d.department.name)}</span>` +
       '<div class="model-bar-track">' +
-      (pct > 0 ? `<div class="model-bar" style="--bar-target:${pct}%;background:${fill}"></div>` : "") +
+      (pct > 0 ? `<div class="${barClass}" style="--bar-target:${pct}%;background:${fill}"></div>` : "") +
       "</div>" +
       '<span class="model-stats">' +
       perEmployee +
@@ -922,6 +988,7 @@ function renderDepartmentBreakdown(attribution) {
 let lastTopSpenders = [];
 
 function renderTopSpenders(attribution) {
+  const previous = previousAmounts(lastTopSpenders, p => p.person.id);
   const groups = new Map(); // person id -> { person, amount_usd }
   for (const row of attribution || []) {
     if (!row.person) continue;
@@ -943,11 +1010,12 @@ function renderTopSpenders(attribution) {
   const maxAmount = Math.max(...lastTopSpenders.map(p => p.amount_usd));
   document.getElementById("people-content").innerHTML = lastTopSpenders.map((p) => {
     const pct = p.amount_usd > 0 && maxAmount > 0 ? Math.max((p.amount_usd / maxAmount) * 100, 1) : 0;
+    const barClass = "model-bar" + (amountChanged(previous, p.person.id, p.amount_usd) ? " bar-changed" : "");
     return (
       '<div class="model-row">' +
       `<span class="model-label" title="${esc(p.person.name)}">${esc(p.person.name)}</span>` +
       '<div class="model-bar-track">' +
-      (pct > 0 ? `<div class="model-bar" style="--bar-target:${pct}%;background:var(--accent)"></div>` : "") +
+      (pct > 0 ? `<div class="${barClass}" style="--bar-target:${pct}%;background:var(--accent)"></div>` : "") +
       "</div>" +
       '<span class="model-stats">' +
       `<span class="model-amount">${fmtUSD(p.amount_usd)}</span>` +
@@ -1183,6 +1251,12 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth, from
   row.style.display = "grid";
 
   const { mtd, forecast, days_elapsed, budget, usageMtd, subscriptionMtd, fixedCostsMtd } = summary;
+  // Captured before prevSummary gets overwritten below — the budget bar's
+  // own "did this change" check (further down) needs both of these as they
+  // stood at the *previous* render, not the values this render is about to
+  // write in.
+  const prevMtd = prevSummary.mtd;
+  const prevBudgetAmt = prevSummary.budget;
 
   document.getElementById("mtd-label").textContent = isCurrentMonth ? "Month to Date" : "Total";
   animateNumber(document.getElementById("mtd-value"), mtd, fmtUSD, prevSummary.mtd);
@@ -1240,7 +1314,10 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth, from
   if (budget != null) {
     const pct = budget > 0 ? (mtd / budget) * 100 : 0;
     const isOver = pct > 100;
-    const barClass = "budget-bar" + (status ? ` bar-${status}` : "") + (isOver ? " bar-over" : "");
+    // The bar's own pct is derived from mtd and budget — animate it only
+    // when one of those two actually moved since the last render.
+    const budgetBarChanged = prevMtd !== mtd || prevBudgetAmt !== budget;
+    const barClass = "budget-bar" + (status ? ` bar-${status}` : "") + (isOver ? " bar-over" : "") + (budgetBarChanged ? " bar-changed" : "");
     const pctLabel = isOver
       ? `<span class="budget-pct-over">${Math.round(pct)}% used</span>`
       : `${Math.round(pct)}% used`;
