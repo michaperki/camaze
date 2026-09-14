@@ -25,7 +25,12 @@ function addTooltip(trigger) {
   trigger.parentElement?.insertBefore(tip, trigger);
   trigger.addEventListener('camaze-tooltip-update', () => {
     tip.textContent = trigger.getAttribute('aria-label') || trigger.dataset.tooltip || '';
+    // Keep the button's explicit, stateful aria-label as its accessible name.
+    // Web Awesome adds aria-labelledby for tooltip content, but the hidden
+    // tooltip can otherwise override that name in some screen readers.
+    trigger.removeAttribute('aria-labelledby');
   });
+  requestAnimationFrame(() => trigger.removeAttribute('aria-labelledby'));
 }
 
 function refreshTooltipText(trigger) {
@@ -59,6 +64,10 @@ export function positionPopover(reference, floating) {
   });
 }
 
-new MutationObserver(setup).observe(document.documentElement, { childList: true, subtree: true });
 setup();
+// Pages that render sections later can call this explicitly after their
+// render. A document-wide MutationObserver is deliberately avoided here:
+// Web Component shadow/light-DOM lifecycle updates can otherwise create a
+// feedback loop during startup.
+window.camazeAestheticSetup = setup;
 window.camazeCelebrate = celebrate;
