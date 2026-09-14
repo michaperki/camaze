@@ -6,12 +6,24 @@
   "scripts": {
     "dev": "vercel dev",
     "test": "node --test test/*.test.js",
-    "dev:insights": "node scripts/insights-preview.js",
+    "dev:insights": "npm run build && node scripts/insights-preview.js",
     "inspect:insights-source": "node scripts/inspect-insights-source.js",
     "refresh:insights-evidence": "node scripts/refresh-insights-evidence.js",
-    "test:insights-ui": "playwright test"
+    "test:insights-ui": "npm run test:ui",
+    "build": "vite build",
+    "dev:ui": "vite --host 127.0.0.1",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:ui": "npm run build && playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0"
+    "@playwright/test": "^1.63.0",
+    "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
+    "echarts": "^6.1.0",
+    "lucide": "^1.46.0",
+    "tabulator-tables": "^6.5.2",
+    "zod": "^4.6.5"
   }
 }

@@ -380,3 +380,8 @@ nav.tabs a.active {
 .chart-x-label { font-size: 10.5px; fill: var(--text-muted); }
 .chart-bar-total { font-size: 9px; fill: var(--text-muted); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
+
+/* Shared icons retain visible labels and never stretch with chart SVGs. */
+.tabs a { display: inline-flex; align-items: center; gap: 6px; }
+.tabs svg, #theme-toggle-btn svg { width: 16px; height: 16px; flex: none; }
+#theme-toggle-btn { display: inline-flex; align-items: center; justify-content: center; }

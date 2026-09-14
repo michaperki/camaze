@@ -1,3 +1,4 @@
+const schemas = import('../shared/org-schema.mjs');
 const businessClock = require("../lib/context");
 // Authenticated CRUD for org structure — departments, people, and the
 // entity-assignment mapping between attribution entities and them — plus
@@ -22,21 +23,9 @@ function currentMonthStr() {
 
 // ---- departments ----------------------------------------------------
 
-function validateDepartmentFields(body, requireAll) {
-  const has = (k) => Object.prototype.hasOwnProperty.call(body, k);
-
-  if (requireAll || has("name")) {
-    if (typeof body.name !== "string" || !body.name.trim()) return "name is required";
-  }
-  if (has("headcount")) {
-    const n = Number(body.headcount);
-    if (!Number.isInteger(n) || n < 0) return "headcount must be a non-negative integer";
-  }
-  if (has("monthly_budget_usd") && body.monthly_budget_usd !== null) {
-    const n = Number(body.monthly_budget_usd);
-    if (!Number.isFinite(n) || n < 0) return "monthly_budget_usd must be a non-negative number or null";
-  }
-  return null;
+async function validateDepartmentFields(body, requireAll) {
+  const { departmentSchema, validationError } = await schemas;
+  return validationError(requireAll ? departmentSchema : departmentSchema.partial(), body);
 }
 
 function pickDepartmentFields(body) {
@@ -55,7 +44,7 @@ async function handleDepartments(req, res, user, body) {
     return;
   }
   if (req.method === "POST") {
-    const error = validateDepartmentFields(body, true);
+    const error = await validateDepartmentFields(body, true);
     if (error) return res.status(400).json({ error });
     const department = await createDepartment(user.id, pickDepartmentFields(body));
     await logAudit(req, user, "department.created", { id: department.id, fields: pickDepartmentFields(body) }, "api/org.js");
@@ -64,7 +53,7 @@ async function handleDepartments(req, res, user, body) {
   }
   if (req.method === "PATCH") {
     if (!body.id) return res.status(400).json({ error: "id is required" });
-    const error = validateDepartmentFields(body, false);
+    const error = await validateDepartmentFields(body, false);
     if (error) return res.status(400).json({ error });
     const fields = pickDepartmentFields(body);
     if (Object.keys(fields).length === 0) return res.status(400).json({ error: "No fields to update" });
@@ -87,19 +76,9 @@ async function handleDepartments(req, res, user, body) {
 
 // ---- people -----------------------------------------------------------
 
-function validatePersonFields(body, requireAll) {
-  const has = (k) => Object.prototype.hasOwnProperty.call(body, k);
-
-  if (requireAll || has("name")) {
-    if (typeof body.name !== "string" || !body.name.trim()) return "name is required";
-  }
-  if (has("email") && body.email !== null) {
-    if (typeof body.email !== "string") return "email must be a string or null";
-  }
-  if (has("department_id") && body.department_id !== null) {
-    if (typeof body.department_id !== "string") return "department_id must be a string or null";
-  }
-  return null;
+async function validatePersonFields(body, requireAll) {
+  const { personSchema, validationError } = await schemas;
+  return validationError(requireAll ? personSchema : personSchema.partial(), body);
 }
 
 function pickPersonFields(body) {
@@ -116,7 +95,7 @@ async function handlePeople(req, res, user, body) {
     return;
   }
   if (req.method === "POST") {
-    const error = validatePersonFields(body, true);
+    const error = await validatePersonFields(body, true);
     if (error) return res.status(400).json({ error });
     const person = await createPerson(user.id, pickPersonFields(body));
     await logAudit(req, user, "person.created", { id: person.id, fields: pickPersonFields(body) }, "api/org.js");
@@ -125,7 +104,7 @@ async function handlePeople(req, res, user, body) {
   }
   if (req.method === "PATCH") {
     if (!body.id) return res.status(400).json({ error: "id is required" });
-    const error = validatePersonFields(body, false);
+    const error = await validatePersonFields(body, false);
     if (error) return res.status(400).json({ error });
     const fields = pickPersonFields(body);
     if (Object.keys(fields).length === 0) return res.status(400).json({ error: "No fields to update" });
@@ -150,6 +129,9 @@ async function handlePeople(req, res, user, body) {
 
 async function handleAssignments(req, res, user, body) {
   if (req.method === "POST") {
+    const { assignmentSchema, validationError } = await schemas;
+    const error = validationError(assignmentSchema, body);
+    if (error) return res.status(400).json({ error });
     const { provider, scope, entity_id: entityId } = body;
     if (typeof provider !== "string" || !provider) return res.status(400).json({ error: "provider is required" });
     if (typeof scope !== "string" || !scope) return res.status(400).json({ error: "scope is required" });

@@ -129,10 +129,10 @@ persisted).
    cp .env.example .env
    ```
 
-2. Run it locally with the [Vercel CLI](https://vercel.com/docs/cli) (no
-   dependencies to install):
+2. Install dependencies and run locally with the [Vercel CLI](https://vercel.com/docs/cli):
 
    ```sh
+   npm ci
    npm run dev
    ```
 
@@ -248,3 +248,35 @@ you're reading this after the initial deploy).
 
 Once connected on the Integrations page, a user's own keys are used instead
 of the server's env vars for that user's dashboard requests.
+
+## Frontend build and libraries
+
+The multi-page frontend is built with Vite into `dist/`; Vercel serves that
+output alongside the existing `api/` functions. `public/` contains HTML,
+shared CSS, and JavaScript modules. `static/` contains the synchronous
+pre-paint theme and simulation bootstrap scripts, copied unchanged to the
+build. Page entry points live in `public/pages/` (Insights uses
+`public/insights.js`). Dependencies, including the previously CDN-loaded
+Supabase SDK, are bundled locally and tracked in `package-lock.json`.
+
+- `npm run build`: production frontend build.
+- `npm run dev`: Vercel API functions and Vite frontend together.
+- `npm run dev:ui`: frontend only (API requests need a backend).
+- `npm run dev:insights`: built frontend with local preview authentication
+  and simulated Insights usage; never loads `.env`.
+- `npm test`: backend/domain and shared validation tests.
+- `npm run test:ui`: build and run desktop/mobile browser tests.
+  Install Chromium first with `npx playwright install chromium` if needed.
+
+ECharts renders daily **usage** with provider visibility buttons, a zoom
+slider, and an expandable exact-value table. Subscriptions remain separate
+from the bars; headline totals retain the full bill. Chart and table colors
+follow the existing theme tokens. Lucide supplies the shared navigation icons.
+
+Tabulator powers attribution entities with search, grouping, sortable
+columns, filtered CSV export, and bulk department assignment. Bulk assignment
+preserves each entity's owner and uses the existing per-entity endpoint;
+successful rows are deselected and failed rows stay selected for retry.
+Clearing an explicit department retains the existing owner-department fallback.
+Department and person CRUD retain their existing forms, with Zod schemas
+shared between the browser and `api/org.js` in `shared/org-schema.mjs`.

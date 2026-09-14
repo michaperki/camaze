@@ -1,3 +1,5 @@
+import { createElement, ChartColumn, Sparkles, Plug, Bell, Users, Sun, Moon } from 'lucide';
+
 // Renders the shared app header (wordmark + nav tabs + sign-out slot) into
 // an empty <header id="app-header"></header> mount. Single source for the
 // header markup so it can't drift page to page the way it did when each
@@ -13,11 +15,11 @@
 // page.
 (function () {
   const NAV = [
-    { href: "/dashboard.html", label: "Dashboard" },
-    { href: "/insights.html", label: "Insights" },
-    { href: "/integrations.html", label: "Integrations" },
-    { href: "/notifications.html", label: "Notifications" },
-    { href: "/assignments.html", label: "Assignments" },
+    { href: "/dashboard.html", label: "Dashboard", icon: ChartColumn },
+    { href: "/insights.html", label: "Insights", icon: Sparkles },
+    { href: "/integrations.html", label: "Integrations", icon: Plug },
+    { href: "/notifications.html", label: "Notifications", icon: Bell },
+    { href: "/assignments.html", label: "Assignments", icon: Users },
   ];
 
   const THEME_KEY = "camaze-theme";
@@ -37,7 +39,7 @@
     const btn = document.getElementById("theme-toggle-btn");
     if (!btn) return;
     const dark = isDark();
-    btn.textContent = dark ? "☀" : "☾";
+    btn.replaceChildren(createElement(dark ? Sun : Moon, { width: 17, height: 17, "aria-hidden": "true" }));
     btn.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
     btn.title = btn.getAttribute("aria-label");
   }
@@ -56,6 +58,7 @@
       // it just won't persist across a reload.
     }
     updateToggleButton();
+    window.dispatchEvent(new Event("camaze-theme-change"));
   }
 
   function renderAppHeader() {
@@ -65,7 +68,7 @@
     const links = NAV.map((item) => {
       if (window.camazeSimulation) item.href = "/sim" + item.href;
       const active = normalize(item.href.replace(/^\/sim/, "")) === current;
-      return `<a href="${item.href}"${active ? ' class="active"' : ""}>${item.label}</a>`;
+      return `<a href="${item.href}"${active ? ' class="active"' : ""}>${createElement(item.icon, { width: 15, height: 15, "aria-hidden": "true" }).outerHTML}<span>${item.label}</span></a>`;
     }).join("");
     mount.innerHTML =
       '<div class="header-inner">' +

@@ -1,3 +1,5 @@
+import * as supabase from '@supabase/supabase-js';
+import './header.js';
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const price = value => `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const stamp = value => value ? new Date(value).toLocaleString(undefined, { timeZone: "UTC" }) + " UTC" : "Not provided";

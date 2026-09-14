@@ -1,0 +1,302 @@
+import * as supabase from '@supabase/supabase-js';
+import '../header.js';
+const esc = (s) => String(s).replace(/</g, "&lt;");
+
+function hourOptionsHtml(selected) {
+  let html = "";
+  for (let h = 0; h < 24; h++) {
+    const period = h < 12 ? "AM" : "PM";
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    const label = `${String(h12).padStart(2, "0")}:00 ${period}`;
+    html += `<option value="${h}"${h === selected ? " selected" : ""}>${label}</option>`;
+  }
+  return html;
+}
+
+function digestSectionHtml(settings) {
+  return `
+    <div class="card" id="digest-section">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Daily Digest</div>
+          <div class="panel-description">Receive a daily spend summary by email.</div>
+        </div>
+      </div>
+      <div class="panel-body">
+        <label class="checkbox-row">
+          <input type="checkbox" id="digest-enabled" ${settings.digestEnabled ? "checked" : ""}>
+          Enable daily digest
+          <span class="save-status" id="digest-save-status"></span>
+        </label>
+
+        <div class="delivery-row${settings.digestEnabled ? "" : " is-dimmed"}" id="delivery-row">
+          <span class="field-label">Delivery time</span>
+          <select id="hour-select" disabled>${hourOptionsHtml(settings.digestHour)}</select>
+          <select id="tz-select" disabled>
+            <option value="UTC">UTC</option>
+          </select>
+          <span class="badge badge-secondary">Coming soon</span>
+        </div>
+        <p class="field-note">Every digest currently sends once a day at 9:00 AM UTC.</p>
+
+        <div class="test-row">
+          <button class="btn btn-secondary" id="test-btn" type="button">Send test email now</button>
+          <span class="test-status" id="test-status"></span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function alertsSectionHtml(settings) {
+  const budgetDisabled = !settings.hasBudget;
+  const budgetChecked = settings.budgetAlertsEnabled && settings.hasBudget;
+
+  const thresholdSection = budgetDisabled
+    ? '<p class="field-note">Set a monthly budget on the <a href="/dashboard.html">dashboard</a> to enable this.</p>'
+    : `<div class="delivery-row${settings.budgetAlertsEnabled ? "" : " is-dimmed"}" id="threshold-row">
+        <span class="field-label">Alert when forecast reaches</span>
+        <input type="number" id="threshold-input" min="1" max="1000" step="1"
+          value="${settings.alertThreshold}" ${settings.budgetAlertsEnabled ? "" : "disabled"}
+          style="width:70px;">
+        <span class="field-label">% of budget</span>
+      </div>`;
+
+  return `
+    <div class="card" id="alerts-section">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Alerts</div>
+          <div class="panel-description">Get emailed the moment something looks off &mdash; sent separately from the daily digest.</div>
+        </div>
+      </div>
+      <div class="panel-body">
+      <label class="checkbox-row">
+        <input type="checkbox" id="spike-enabled" ${settings.spikeAlertsEnabled ? "checked" : ""}>
+        Spike alerts
+        <span class="save-status" id="spike-save-status"></span>
+      </label>
+      <p class="field-note">When a day's usage is well above normal — either a multiple of your typical spend, or any meaningful spend after a quiet stretch.</p>
+
+      <label class="checkbox-row" style="margin-top:16px;">
+        <input type="checkbox" id="budget-alerts-enabled" ${budgetChecked ? "checked" : ""} ${budgetDisabled ? "disabled" : ""}>
+        Budget threshold alerts
+        <span class="save-status" id="budget-save-status"></span>
+      </label>
+      ${thresholdSection}
+
+      <div class="test-row">
+        <button class="btn btn-secondary" id="alert-test-btn" type="button">Send test alert</button>
+        <span class="test-status" id="alert-test-status"></span>
+      </div>
+      </div>
+    </div>`;
+}
+
+async function main() {
+  const cfgRes = await window.camazeFetch("/api/config");
+  const cfg = await cfgRes.json();
+  if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
+    document.getElementById("content").innerHTML =
+      '<div class="message">Auth is not configured (missing SUPABASE_URL/SUPABASE_ANON_KEY).</div>';
+    return;
+  }
+
+  const client = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+  const { data: { session } } = await client.auth.getSession();
+  if (!session) {
+    window.location.replace("/login.html");
+    return;
+  }
+
+  await window.initializeSimulation(session);
+  document.getElementById("user-email").textContent = session.user.email ?? "";
+  document.getElementById("header-right").style.visibility = "visible";
+  document.getElementById("signout-btn").addEventListener("click", async () => {
+    await client.auth.signOut();
+    window.location.replace("/login.html");
+  });
+
+  const authHeaders = { Authorization: `Bearer ${session.access_token}` };
+  const content = document.getElementById("content");
+
+  const res = await window.camazeFetch("/api/notifications", { headers: authHeaders });
+  const settings = await res.json();
+  if (settings.error) throw new Error(settings.error);
+
+  content.innerHTML = digestSectionHtml(settings) + alertsSectionHtml(settings);
+
+  const digestCheckbox = document.getElementById("digest-enabled");
+  const saveStatus = document.getElementById("digest-save-status");
+  const deliveryRow = document.getElementById("delivery-row");
+  digestCheckbox.addEventListener("change", () => {
+    const enabled = digestCheckbox.checked;
+    deliveryRow.classList.toggle("is-dimmed", !enabled);
+    saveStatus.className = "save-status";
+    saveStatus.textContent = "";
+    digestCheckbox.disabled = true;
+
+    const body = {
+      digestEnabled: enabled,
+      digestHour: Number(document.getElementById("hour-select").value),
+    };
+
+    window.camazeFetch("/api/notifications", {
+      method: "POST",
+      headers: { ...authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(async (r) => {
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+        saveStatus.textContent = "Saved";
+        saveStatus.className = "save-status ok";
+        setTimeout(() => { saveStatus.textContent = ""; saveStatus.className = "save-status"; }, 1500);
+      })
+      .catch((err) => {
+        digestCheckbox.checked = !enabled;
+        deliveryRow.classList.toggle("is-dimmed", !digestCheckbox.checked);
+        saveStatus.textContent = err.message;
+        saveStatus.className = "save-status error";
+      })
+      .finally(() => { digestCheckbox.disabled = false; });
+  });
+
+  const testBtn = document.getElementById("test-btn");
+  const testStatus = document.getElementById("test-status");
+  testBtn.addEventListener("click", () => {
+    testStatus.textContent = "";
+    testStatus.className = "test-status";
+    testBtn.disabled = true;
+    testBtn.textContent = "Sending…";
+
+    window.camazeFetch("/api/digest", { method: "POST", headers: authHeaders })
+      .then(async (r) => {
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+        testStatus.textContent = `Sent to ${session.user.email}`;
+        testStatus.className = "test-status ok";
+      })
+      .catch((err) => {
+        testStatus.textContent = err.message;
+        testStatus.className = "test-status error";
+      })
+      .finally(() => {
+        testBtn.disabled = false;
+        testBtn.textContent = "Send test email now";
+      });
+  });
+
+  const spikeCheckbox = document.getElementById("spike-enabled");
+  const spikeSaveStatus = document.getElementById("spike-save-status");
+  spikeCheckbox.addEventListener("change", () => {
+    const enabled = spikeCheckbox.checked;
+    spikeSaveStatus.className = "save-status";
+    spikeSaveStatus.textContent = "";
+    spikeCheckbox.disabled = true;
+
+    window.camazeFetch("/api/notifications", {
+      method: "POST",
+      headers: { ...authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ spikeAlertsEnabled: enabled }),
+    })
+      .then(async (r) => {
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+        spikeSaveStatus.textContent = "Saved";
+        spikeSaveStatus.className = "save-status ok";
+        setTimeout(() => { spikeSaveStatus.textContent = ""; spikeSaveStatus.className = "save-status"; }, 1500);
+      })
+      .catch((err) => {
+        spikeCheckbox.checked = !enabled;
+        spikeSaveStatus.textContent = err.message;
+        spikeSaveStatus.className = "save-status error";
+      })
+      .finally(() => { spikeCheckbox.disabled = false; });
+  });
+
+  const budgetAlertsCheckbox = document.getElementById("budget-alerts-enabled");
+  const budgetSaveStatus = document.getElementById("budget-save-status");
+  const thresholdRow = document.getElementById("threshold-row");
+  const thresholdInput = document.getElementById("threshold-input");
+
+  if (budgetAlertsCheckbox && thresholdInput) {
+    let lastGoodEnabled = budgetAlertsCheckbox.checked;
+    let lastGoodThreshold = thresholdInput.value;
+
+    const saveBudgetAlertSettings = () => {
+      budgetSaveStatus.className = "save-status";
+      budgetSaveStatus.textContent = "";
+      const enabled = budgetAlertsCheckbox.checked;
+      const threshold = Number(thresholdInput.value);
+      if (!Number.isFinite(threshold) || threshold <= 0) {
+        budgetSaveStatus.textContent = "Enter a positive number";
+        budgetSaveStatus.className = "save-status error";
+        return;
+      }
+      budgetAlertsCheckbox.disabled = true;
+      thresholdInput.disabled = true;
+
+      window.camazeFetch("/api/notifications", {
+        method: "POST",
+        headers: { ...authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ budgetAlertsEnabled: enabled, alertThreshold: threshold }),
+      })
+        .then(async (r) => {
+          const data = await r.json();
+          if (data.error) throw new Error(data.error);
+          lastGoodEnabled = enabled;
+          lastGoodThreshold = String(threshold);
+          budgetSaveStatus.textContent = "Saved";
+          budgetSaveStatus.className = "save-status ok";
+          setTimeout(() => { budgetSaveStatus.textContent = ""; budgetSaveStatus.className = "save-status"; }, 1500);
+        })
+        .catch((err) => {
+          budgetAlertsCheckbox.checked = lastGoodEnabled;
+          thresholdInput.value = lastGoodThreshold;
+          thresholdRow.classList.toggle("is-dimmed", !lastGoodEnabled);
+          budgetSaveStatus.textContent = err.message;
+          budgetSaveStatus.className = "save-status error";
+        })
+        .finally(() => {
+          budgetAlertsCheckbox.disabled = false;
+          thresholdInput.disabled = !budgetAlertsCheckbox.checked;
+        });
+    };
+
+    budgetAlertsCheckbox.addEventListener("change", () => {
+      thresholdRow.classList.toggle("is-dimmed", !budgetAlertsCheckbox.checked);
+      saveBudgetAlertSettings();
+    });
+    thresholdInput.addEventListener("change", saveBudgetAlertSettings);
+  }
+
+  const alertTestBtn = document.getElementById("alert-test-btn");
+  const alertTestStatus = document.getElementById("alert-test-status");
+  alertTestBtn.addEventListener("click", () => {
+    alertTestStatus.textContent = "";
+    alertTestStatus.className = "test-status";
+    alertTestBtn.disabled = true;
+    alertTestBtn.textContent = "Sending…";
+
+    window.camazeFetch("/api/alerts/test", { method: "POST", headers: authHeaders })
+      .then(async (r) => {
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+        alertTestStatus.textContent = `Sent to ${session.user.email}`;
+        alertTestStatus.className = "test-status ok";
+      })
+      .catch((err) => {
+        alertTestStatus.textContent = err.message;
+        alertTestStatus.className = "test-status error";
+      })
+      .finally(() => {
+        alertTestBtn.disabled = false;
+        alertTestBtn.textContent = "Send test alert";
+      });
+  });
+}
+
+main().catch((err) => {
+  document.getElementById("content").innerHTML =
+    '<div class="message">Could not load notification settings: ' + esc(err.message) + "</div>";
+});

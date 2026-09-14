@@ -89,5 +89,8 @@
     "api/sim.js": {
       "maxDuration": 300
     }
-  }
+  },
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "devCommand": "npm run dev:ui"
 }

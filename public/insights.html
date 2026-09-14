@@ -47,7 +47,6 @@
 </head>
 <body>
 <header id="app-header"></header>
-<script src="/header.js"></script>
 <main>
   <p class="subtitle">Model candidates worth evaluating</p>
   <div id="status" role="status" aria-live="polite">Loading recorded usage...</div>
@@ -55,7 +54,6 @@
   <section id="insights" aria-label="Model comparisons"></section>
   <section id="coverage" aria-label="Comparison coverage"></section>
 </main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="/insights.js"></script>
+<script type="module" src="/insights.js"></script>
 </body>
 </html>
