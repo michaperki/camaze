@@ -1,5 +1,6 @@
 import * as supabase from '@supabase/supabase-js';
 import '../header.js';
+import { celebrate } from '../aesthetic.js';
 const README_URL = "https://github.com/michaperki/camaze/blob/main/README.md#setup";
 
 const PROVIDERS = [
@@ -233,6 +234,7 @@ async function main() {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         sessionStorage.setItem("camaze_keys_changed", "1");
+        celebrate();
         return loadKeys();
       })
       .catch((err) => {

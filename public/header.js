@@ -1,4 +1,5 @@
 import { createElement, ChartColumn, Sparkles, Plug, Bell, Users, Sun, Moon } from 'lucide';
+import './aesthetic.js';
 
 // Renders the shared app header (wordmark + nav tabs + sign-out slot) into
 // an empty <header id="app-header"></header> mount. Single source for the
@@ -76,7 +77,7 @@ import { createElement, ChartColumn, Sparkles, Plug, Bell, Users, Sun, Moon } fr
       `<nav class="tabs">${links}</nav>` +
       '<div class="header-right" id="header-right">' +
       '<span id="user-email"></span>' +
-      '<button id="theme-toggle-btn" type="button"></button>' +
+      '<wa-tooltip content="Toggle color theme"><button id="theme-toggle-btn" data-tooltip="Toggle color theme" type="button"></button></wa-tooltip>' +
       '<button id="signout-btn" type="button">Sign out</button>' +
       "</div>" +
       "</div>";
