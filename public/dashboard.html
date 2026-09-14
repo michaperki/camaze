@@ -295,26 +295,19 @@
     color: var(--text-primary);
   }
   /* Sim day/month advances (and month navigation) re-render these bars and
-     headline numbers rather than the page reloading. Every render rebuilds
-     this markup from scratch (fresh DOM nodes every time), so animating
-     unconditionally on every re-render would make every bar flash on every
-     tick even when its value didn't move — the "pulsating" look. Instead,
-     each render() function below computes whether a given row/day's value
-     actually changed since the *previous* render and only then adds
-     .bar-changed — an unchanged bar gets no animation at all and simply
-     sits at its already-correct resting state (identical to how it'd look
-     mid-transition-completed), so only the genuinely new/changed bars
-     visibly move. The static `width: var(--bar-target)` is the real source
-     of truth (and the whole story under reduced motion) either way. */
+     headline numbers rather than the page reloading. These bars (model/
+     project/department/top-spender/budget) are all *proportional to the
+     render's own max* — so a bar's width can shift even when its own
+     dollar amount didn't (some other row grew and became the new max).
+     That rules out an "animate in from zero" keyframe on every render: a
+     changed bar should visibly move by just the incremental amount, not
+     regrow from nothing. Instead each render function sets the bar's
+     *previous* rendered width inline as its starting style, then
+     growBars() (in the page script below) flips it to the new target
+     width on the next frame — a plain width transition, so a bar whose
+     width didn't change just... doesn't move. */
   .model-bar, .budget-bar {
-    width: var(--bar-target, 0%);
-  }
-  .model-bar.bar-changed, .budget-bar.bar-changed {
-    animation: sim-bar-grow 0.5s cubic-bezier(.22, .9, .32, 1) both;
-  }
-  @keyframes sim-bar-grow {
-    from { width: 0%; }
-    to { width: var(--bar-target, 100%); }
+    transition: width 0.5s cubic-bezier(.22, .9, .32, 1);
   }
   /* Each day's stacked-bar shapes share one <g> (see the chart's render())
      so the whole day can scale up from the baseline it already sits on —
@@ -339,7 +332,8 @@
     to { opacity: 1; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .model-bar.bar-changed, .budget-bar.bar-changed, .chart-bar-group.bar-changed, .chart-bar-total.bar-changed { animation: none; }
+    .model-bar, .budget-bar { transition: none; }
+    .chart-bar-group.bar-changed, .chart-bar-total.bar-changed { animation: none; }
   }
 </style>
 </head>
@@ -502,21 +496,36 @@ function animateNumber(el, to, fmt, from) {
 // animateNumber() as the "from" on the next render, written right after.
 let prevChartTotal = null;
 let prevSummary = { mtd: null, forecast: null, budget: null };
+let prevBudgetPct = null;
 
-// Value-change tracking for the breakdown bars (models/attribution/
-// departments/top spenders) — see the .bar-changed comment in <style>
-// above. Every render() function below rebuilds its rows' markup from
-// scratch on every call (a sim tick, a month-nav click, ...), so without
-// this a single row changing would replay the grow-in animation on every
-// row. `previous` must be captured from the render's own last-render cache
-// (e.g. lastModels) *before* that cache is overwritten with the new data.
-function previousAmounts(rows, keyFn) {
-  const m = new Map();
-  for (const r of rows || []) m.set(keyFn(r), r.amount_usd);
-  return m;
-}
-function amountChanged(previous, key, amount) {
-  return !previous.has(key) || previous.get(key) !== amount;
+// Width-transition continuity for the breakdown bars (models/attribution/
+// departments/top spenders/budget) — see the .model-bar/.budget-bar
+// comment in <style> above. Every render() function below rebuilds its
+// rows' markup from scratch on every call (a sim tick, a month-nav click,
+// ...), so a bar can't rely on the browser's normal implicit transition
+// (same element, new style) — the element itself is brand new each time.
+// Instead each render function stashes the bar's rendered *width
+// percentage* (not the raw dollar amount — these bars are proportional to
+// the render's own max, so another row growing can shift this one's pct
+// even though its own amount didn't move) into its own key -> pct map,
+// reads the previous map before overwriting it, sets each bar's initial
+// inline width to its old pct (0 for a row that didn't exist before), and
+// calls growBars() right after to flip every bar to its real target width
+// on the next frame — a plain CSS transition, so a bar that didn't
+// actually move just doesn't.
+function growBars(container) {
+  if (!container) return;
+  const bars = container.querySelectorAll("[data-grow]");
+  if (bars.length === 0) return;
+  if (REDUCED_MOTION) {
+    bars.forEach((el) => { el.style.width = el.dataset.grow + "%"; });
+    return;
+  }
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      bars.forEach((el) => { el.style.width = el.dataset.grow + "%"; });
+    });
+  });
 }
 
 function fmtAgo(iso) {
@@ -783,18 +792,22 @@ function prettifyModel(provider, model) {
 
 let lastModels = [];
 let lastAttribution = [];
+let lastModelsPct = new Map();
+let lastAttributionPct = new Map();
 
 function renderModels(models) {
-  const previous = previousAmounts(lastModels, m => `${m.provider}|${m.model}`);
+  const previousPct = lastModelsPct;
   lastModels = models || [];
   updateBreakdownCardVisibility();
   if (lastModels.length === 0) {
     document.getElementById("models-content").innerHTML = "";
+    lastModelsPct = new Map();
     return;
   }
 
   const maxAmount = Math.max(...lastModels.map(m => m.amount_usd));
   const totalAmount = lastModels.reduce((sum, m) => sum + m.amount_usd, 0);
+  const nextPct = new Map();
   document.getElementById("models-content").innerHTML = lastModels.map(m => {
     // A zero-amount row must draw no bar at all — flooring it to 1% (or
     // relying on .model-bar's min-width) would render a sliver for a
@@ -804,12 +817,14 @@ function renderModels(models) {
     const shareLabel = share > 0 && share < 1 ? share.toFixed(1) : Math.round(share);
     const fill = SERIES_VARS[m.provider] || "var(--text-muted)";
     const label = prettifyModel(m.provider, m.model);
-    const barClass = "model-bar" + (amountChanged(previous, `${m.provider}|${m.model}`, m.amount_usd) ? " bar-changed" : "");
+    const key = `${m.provider}|${m.model}`;
+    nextPct.set(key, pct);
+    const fromPct = previousPct.get(key) ?? 0;
     return (
       '<div class="model-row">' +
       `<span class="model-label" title="${esc(m.model)}">${esc(label)}</span>` +
       '<div class="model-bar-track">' +
-      (pct > 0 ? `<div class="${barClass}" style="--bar-target:${pct}%;background:${fill}"></div>` : "") +
+      (pct > 0 ? `<div class="model-bar" data-grow="${pct}" style="width:${fromPct}%;background:${fill}"></div>` : "") +
       "</div>" +
       '<span class="model-stats">' +
       `<span class="model-pct">${shareLabel}%</span>` +
@@ -818,6 +833,8 @@ function renderModels(models) {
       "</div>"
     );
   }).join("");
+  lastModelsPct = nextPct;
+  growBars(document.getElementById("models-content"));
 }
 
 // The backend already picks one scope per provider (api_key vs workspace
@@ -831,12 +848,13 @@ const PROVIDER_ORDER = ["anthropic", "openai", "google"];
 
 function renderAttribution(attribution) {
   const unpricedNote = document.getElementById("attribution-unpriced-note");
-  const previous = previousAmounts(lastAttribution, a => `${a.provider}|${a.scope}|${a.name}`);
+  const previousPct = lastAttributionPct;
   lastAttribution = attribution || [];
   updateBreakdownCardVisibility();
   if (lastAttribution.length === 0) {
     document.getElementById("attribution-content").innerHTML = "";
     unpricedNote.style.display = "none";
+    lastAttributionPct = new Map();
     return;
   }
 
@@ -865,6 +883,7 @@ function renderAttribution(attribution) {
   const order = PROVIDER_ORDER.filter(p => groups.has(p))
     .concat([...groups.keys()].filter(p => !PROVIDER_ORDER.includes(p)));
 
+  const nextPct = new Map();
   document.getElementById("attribution-content").innerHTML = order.map(providerName => {
     const rows = groups.get(providerName).slice().sort((a, b) => b.amount_usd - a.amount_usd);
     const maxAmount = Math.max(...rows.map(r => r.amount_usd));
@@ -890,12 +909,14 @@ function renderAttribution(attribution) {
       const unpricedBadge = a.unpriced
         ? ` <span class="badge badge-warning" title="${esc((a.unpricedModels || []).join(', '))}">unpriced</span>`
         : "";
-      const barClass = "model-bar" + (amountChanged(previous, `${a.provider}|${a.scope}|${a.name}`, a.amount_usd) ? " bar-changed" : "");
+      const key = `${a.provider}|${a.scope}|${a.name}`;
+      nextPct.set(key, pct);
+      const fromPct = previousPct.get(key) ?? 0;
       return (
         '<div class="model-row">' +
         `<span class="model-label" title="${esc(a.name)}">${esc(a.name)}</span>` +
         '<div class="model-bar-track">' +
-        (pct > 0 ? `<div class="${barClass}" style="--bar-target:${pct}%;background:${fill}"></div>` : "") +
+        (pct > 0 ? `<div class="model-bar" data-grow="${pct}" style="width:${fromPct}%;background:${fill}"></div>` : "") +
         "</div>" +
         '<span class="model-stats">' +
         `<span class="model-amount">${fmtUSD(a.amount_usd)}${estBadge}${unpricedBadge}</span>` +
@@ -909,6 +930,8 @@ function renderAttribution(attribution) {
     // to be direct children of it for their columns to align.
     return label + bars;
   }).join("");
+  lastAttributionPct = nextPct;
+  growBars(document.getElementById("attribution-content"));
 }
 
 // Spend-by-department breakdown, grouped from the same attribution rows
@@ -917,9 +940,10 @@ function renderAttribution(attribution) {
 // never excluded, never merged into another department, sorted by spend
 // like every other row rather than pinned to a fixed position.
 let lastDepartments = [];
+let lastDepartmentsPct = new Map();
 
 function renderDepartmentBreakdown(attribution) {
-  const previous = previousAmounts(lastDepartments, d => d.department.id ?? "unassigned");
+  const previousPct = lastDepartmentsPct;
   const groups = new Map(); // department id ("unassigned" for null) -> { department, amount_usd }
   for (const row of attribution || []) {
     const dept = row.department || UNASSIGNED_DEPT;
@@ -933,10 +957,12 @@ function renderDepartmentBreakdown(attribution) {
   const content = document.getElementById("departments-content");
   if (lastDepartments.length === 0) {
     content.innerHTML = "";
+    lastDepartmentsPct = new Map();
     return;
   }
 
   const maxAmount = Math.max(...lastDepartments.map(d => d.amount_usd));
+  const nextPct = new Map();
   content.innerHTML = lastDepartments.map((d) => {
     const isUnassigned = d.department.id === null;
     // Same zero-amount guard as renderModels — draw no bar for a $0 row.
@@ -962,13 +988,15 @@ function renderDepartmentBreakdown(attribution) {
       ? ` <span class="badge badge-warning" title="Spend from keys/projects with no department or owner set — assign them on the Assignments page">unassigned</span>`
       : "";
     const amountClass = "model-amount" + (status ? ` stat-${status}` : "");
-    const barClass = "model-bar" + (amountChanged(previous, d.department.id ?? "unassigned", d.amount_usd) ? " bar-changed" : "");
+    const key = d.department.id ?? "unassigned";
+    nextPct.set(key, pct);
+    const fromPct = previousPct.get(key) ?? 0;
 
     return (
       '<div class="model-row">' +
       `<span class="model-label" title="${esc(d.department.name)}">${esc(d.department.name)}</span>` +
       '<div class="model-bar-track">' +
-      (pct > 0 ? `<div class="${barClass}" style="--bar-target:${pct}%;background:${fill}"></div>` : "") +
+      (pct > 0 ? `<div class="model-bar" data-grow="${pct}" style="width:${fromPct}%;background:${fill}"></div>` : "") +
       "</div>" +
       '<span class="model-stats">' +
       perEmployee +
@@ -977,6 +1005,8 @@ function renderDepartmentBreakdown(attribution) {
       "</div>"
     );
   }).join("");
+  lastDepartmentsPct = nextPct;
+  growBars(content);
 }
 
 // Top spenders, grouped the same way by row.person instead of
@@ -986,9 +1016,10 @@ function renderDepartmentBreakdown(attribution) {
 // nobody has been assigned as an owner yet, rather than showing an empty
 // leaderboard.
 let lastTopSpenders = [];
+let lastTopSpendersPct = new Map();
 
 function renderTopSpenders(attribution) {
-  const previous = previousAmounts(lastTopSpenders, p => p.person.id);
+  const previousPct = lastTopSpendersPct;
   const groups = new Map(); // person id -> { person, amount_usd }
   for (const row of attribution || []) {
     if (!row.person) continue;
@@ -1002,20 +1033,24 @@ function renderTopSpenders(attribution) {
   tab.style.display = lastTopSpenders.length > 0 ? "" : "none";
   if (lastTopSpenders.length === 0) {
     document.getElementById("people-content").innerHTML = "";
+    lastTopSpendersPct = new Map();
     if (breakdownTab === "people") breakdownTab = "models";
     applyBreakdownTab();
     return;
   }
 
   const maxAmount = Math.max(...lastTopSpenders.map(p => p.amount_usd));
-  document.getElementById("people-content").innerHTML = lastTopSpenders.map((p) => {
+  const nextPct = new Map();
+  const peopleContent = document.getElementById("people-content");
+  peopleContent.innerHTML = lastTopSpenders.map((p) => {
     const pct = p.amount_usd > 0 && maxAmount > 0 ? Math.max((p.amount_usd / maxAmount) * 100, 1) : 0;
-    const barClass = "model-bar" + (amountChanged(previous, p.person.id, p.amount_usd) ? " bar-changed" : "");
+    nextPct.set(p.person.id, pct);
+    const fromPct = previousPct.get(p.person.id) ?? 0;
     return (
       '<div class="model-row">' +
       `<span class="model-label" title="${esc(p.person.name)}">${esc(p.person.name)}</span>` +
       '<div class="model-bar-track">' +
-      (pct > 0 ? `<div class="${barClass}" style="--bar-target:${pct}%;background:var(--accent)"></div>` : "") +
+      (pct > 0 ? `<div class="model-bar" data-grow="${pct}" style="width:${fromPct}%;background:var(--accent)"></div>` : "") +
       "</div>" +
       '<span class="model-stats">' +
       `<span class="model-amount">${fmtUSD(p.amount_usd)}</span>` +
@@ -1023,6 +1058,8 @@ function renderTopSpenders(attribution) {
       "</div>"
     );
   }).join("");
+  lastTopSpendersPct = nextPct;
+  growBars(peopleContent);
   applyBreakdownTab();
 }
 
@@ -1246,17 +1283,12 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth, from
   if (!summary) {
     row.style.display = "none";
     prevSummary = { mtd: null, forecast: null, budget: null };
+    prevBudgetPct = null;
     return;
   }
   row.style.display = "grid";
 
   const { mtd, forecast, days_elapsed, budget, usageMtd, subscriptionMtd, fixedCostsMtd } = summary;
-  // Captured before prevSummary gets overwritten below — the budget bar's
-  // own "did this change" check (further down) needs both of these as they
-  // stood at the *previous* render, not the values this render is about to
-  // write in.
-  const prevMtd = prevSummary.mtd;
-  const prevBudgetAmt = prevSummary.budget;
 
   document.getElementById("mtd-label").textContent = isCurrentMonth ? "Month to Date" : "Total";
   animateNumber(document.getElementById("mtd-value"), mtd, fmtUSD, prevSummary.mtd);
@@ -1314,19 +1346,24 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth, from
   if (budget != null) {
     const pct = budget > 0 ? (mtd / budget) * 100 : 0;
     const isOver = pct > 100;
-    // The bar's own pct is derived from mtd and budget — animate it only
-    // when one of those two actually moved since the last render.
-    const budgetBarChanged = prevMtd !== mtd || prevBudgetAmt !== budget;
-    const barClass = "budget-bar" + (status ? ` bar-${status}` : "") + (isOver ? " bar-over" : "") + (budgetBarChanged ? " bar-changed" : "");
+    const targetPct = Math.min(pct, 100);
+    // Same width-transition approach as the breakdown bars above: start
+    // from wherever the bar was last rendered (0 if there wasn't one),
+    // then growBars() flips it to targetPct — so a day advance moves the
+    // bar by just the incremental amount instead of regrowing from zero.
+    const fromPct = prevBudgetPct ?? 0;
+    const barClass = "budget-bar" + (status ? ` bar-${status}` : "") + (isOver ? " bar-over" : "");
     const pctLabel = isOver
       ? `<span class="budget-pct-over">${Math.round(pct)}% used</span>`
       : `${Math.round(pct)}% used`;
     budgetContent.innerHTML =
       `<div class="stat-card-value" id="budget-stat-value">${fmtUSD(budget)}</div>` +
-      `<div class="budget-bar-track"><div class="${barClass}" style="--bar-target:${Math.min(pct, 100)}%"></div></div>` +
+      `<div class="budget-bar-track"><div class="${barClass}" data-grow="${targetPct}" style="width:${fromPct}%"></div></div>` +
       `<div class="stat-card-meta">${pctLabel} &middot; <a href="#" id="edit-budget-link">Edit</a></div>`;
     animateNumber(document.getElementById("budget-stat-value"), budget, fmtUSD, prevSummary.budget);
     prevSummary.budget = budget;
+    prevBudgetPct = targetPct;
+    growBars(budgetContent);
     document.getElementById("edit-budget-link").addEventListener("click", (e) => {
       e.preventDefault();
       showBudgetForm(accessToken, budget);
@@ -1334,6 +1371,7 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth, from
   } else {
     budgetContent.innerHTML = '<button class="btn btn-sm" id="set-budget-btn" type="button">Set budget</button>';
     prevSummary.budget = null;
+    prevBudgetPct = null;
     document.getElementById("set-budget-btn").addEventListener("click", () => {
       showBudgetForm(accessToken, null);
     });
