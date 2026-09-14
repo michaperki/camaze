@@ -8,7 +8,6 @@ function createHandler(deps = { verifyUser, getUsage, getSource }, now = () => n
     const user = await deps.verifyUser(req.headers.authorization).catch(() => null);
     if (!user) return res.status(401).json({ error: "Unauthorized" });
     const date = now();
-    if (req.query?.sample === "1") return res.status(200).json(require("../lib/insights/samples").sampleInsights(date));
     try {
       const [rows, source] = await Promise.all([
         deps.getUsage(user.id, recentWindow(date)),

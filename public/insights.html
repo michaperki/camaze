@@ -1,28 +1,55 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Insights | Camaze</title>
-  <script src="/theme-init.js"></script>
-  <link rel="stylesheet" href="/shared.css">
-  <link rel="stylesheet" href="/insights.css">
+<meta charset="utf-8">
+<script src="/theme-init.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>camaze — insights</title>
+<link rel="stylesheet" href="/shared.css">
+<style>
+  .muted { color: var(--text-muted); }
+  #status { padding: 16px 18px; background: var(--code-bg); border-left: 3px solid var(--accent); line-height: 1.6; font-size: 14px; overflow-wrap: anywhere; }
+  #period { font-size: 13px; margin: 20px 0; }
+  .insight { border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 20px; background: var(--surface-1); overflow: hidden; }
+  .insight-top { padding: 22px 24px 0; }
+  .eyebrow { font-size: 12px; color: var(--text-muted); }
+  .candidate { color: var(--ok-fg); }
+  .model-pair { display: grid; grid-template-columns: 1fr 36px 1fr; gap: 12px; align-items: center; margin: 16px 0; }
+  .model-pair .arrow { font-size: 24px; color: var(--text-muted); text-align: center; }
+  .model-pair p { margin: 0; font-size: 12px; }
+  .model-pair h2 { font-size: 20px; margin: 8px 0; overflow-wrap: anywhere; }
+  .metric-grid { display: grid; grid-template-columns: minmax(0,1.2fr) repeat(2,minmax(0,1fr)); gap: 12px 20px; padding: 18px 24px; font-size: 13px; background: var(--code-bg); }
+  .metric-grid strong { font-family: var(--font-mono); font-size: 15px; font-weight: 500; }
+  .metric-grid .candidate { font-weight: 600; }
+  .reason { padding: 0 24px; font-size: 14px; }
+  .insight details { border-top: 1px solid var(--border); padding: 16px 24px; font-size: 13px; overflow-wrap: anywhere; }
+  .insight summary { cursor: pointer; color: var(--text-secondary); }
+  .insight details p { margin: 12px 0 0; }
+  .insight details ul { padding-left: 20px; line-height: 1.8; }
+  #coverage { margin-top: 28px; font-size: 14px; }
+  #coverage ul { padding-left: 20px; line-height: 1.8; overflow-wrap: anywhere; }
+  @media(max-width: 680px) {
+    .insight-top, .metric-grid, .insight details { padding-left: 16px; padding-right: 16px; }
+    .reason { padding: 0 16px; }
+    .model-pair { grid-template-columns: 1fr; gap: 6px; }
+    .model-pair .arrow { display: none; }
+    .model-pair h2 { font-size: 18px; }
+    .metric-grid { gap: 12px 8px; font-size: 11px; }
+    .metric-grid strong { font-size: 13px; }
+  }
+</style>
 </head>
 <body>
-  <header id="app-header"></header><script src="/header.js"></script>
-  <main>
-    <div class="insights-heading"><div><h1>Insights</h1><p class="muted">Model candidates worth evaluating</p></div>
-      <fieldset class="view-switch"><legend class="sr-only">Insights data</legend>
-        <label><input type="radio" name="view" value="real" checked> Your usage</label>
-        <label><input type="radio" name="view" value="sample"> Sample examples</label>
-      </fieldset>
-    </div>
-    <div id="status" role="status" aria-live="polite">Loading recorded usage...</div>
-    <p id="period" class="muted"></p>
-    <section id="insights" aria-label="Model comparisons"></section>
-    <section id="coverage" aria-label="Comparison coverage"></section>
-  </main>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="/insights.js"></script>
+<header id="app-header"></header>
+<script src="/header.js"></script>
+<main>
+  <p class="subtitle">Model candidates worth evaluating</p>
+  <div id="status" role="status" aria-live="polite">Loading recorded usage...</div>
+  <p id="period" class="muted"></p>
+  <section id="insights" aria-label="Model comparisons"></section>
+  <section id="coverage" aria-label="Comparison coverage"></section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/insights.js"></script>
 </body>
 </html>

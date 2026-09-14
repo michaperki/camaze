@@ -3,18 +3,22 @@
 ## Product behavior
 
 An authenticated, read-only page compares exact model IDs in the customer's last
-30 complete UTC days of recorded usage. It does not fetch provider usage, change
-models, calculate personal savings, or write customer records. Existing cost sync
-continues to populate `daily_costs`. General comparisons require a higher published
-AA Intelligence Index score and input/output rates that are both no higher, with
-at least one strictly lower. Discounts, caching and completed-task costs are not
-estimated. Context, input/output modalities and tool support must not regress;
-billing records cannot establish application requirements or reasoning settings.
+182 complete UTC days (~6 months) of recorded usage. It does not fetch provider
+usage, change models, calculate personal savings, or write customer records.
+Existing cost sync continues to populate `daily_costs`. General comparisons
+require a higher published AA Intelligence Index score and input/output rates
+that are both no higher, with at least one strictly lower. Discounts, caching
+and completed-task costs are not estimated. Context, input/output modalities and
+tool support must not regress; billing records cannot establish application
+requirements or reasoning settings.
 
-The initial reviewed pairs are GPT-4o (2024-11-20) to GPT-4.1 (2025-04-14), and
-Claude Opus 4.1 to Opus 4.5. Aliases, other snapshots and other providers are
-unsupported, not guessed. Opus 4.1 is retired; retained historical records are
-still identifiable, but normally fall outside the recent usage window.
+The reviewed pairs are GPT-4o (2024-11-20) to GPT-4.1 (2025-04-14), GPT-4o mini
+(2024-07-18) to GPT-4.1 nano (2025-04-14), and Claude Opus 4.1 to Opus 4.5.
+Claude Haiku 4.5 (2025-10-01) is also reviewed but has no paired replacement —
+nothing reviewed here currently beats it on both price and score. Aliases,
+other snapshots and other providers are unsupported, not guessed. Opus 4.1 is
+retired; retained historical records are still identifiable, but normally fall
+outside the recent usage window.
 
 ## Live extraction verified 2026-09-11
 
@@ -34,7 +38,8 @@ Public HTML is not a stable API contract; layout/schema changes fail closed.
 Provider rate/capability sources are stored with each catalog entry:
 - https://developers.openai.com/api/docs/models/gpt-4o
 - https://developers.openai.com/api/docs/models/gpt-4.1
-- https://platform.claude.com/docs/en/about-claude/pricing
+- https://developers.openai.com/api/docs/pricing (gpt-4o mini, gpt-4.1 nano; reviewed 2026-09-13)
+- https://platform.claude.com/docs/en/about-claude/pricing (also covers Haiku 4.5, reviewed 2026-09-13)
 - Availability: https://platform.claude.com/docs/en/about-claude/model-deprecations
 
 ## Boundaries and operations
@@ -46,7 +51,9 @@ Provider rate/capability sources are stored with each catalog entry:
 - `lib/insights/rules.js`: deterministic, side-effect-free recommendation rules.
 - `lib/insights/store.js`: shared snapshot and explicitly tenant-filtered usage.
 - `api/insights.js`: existing Supabase token verification; no shared HTTP caching.
-  Sample responses require sign-in but never read or persist customer usage.
+  Every response reads the requesting tenant's own recorded usage only; there is
+  no fictional/sample data path (removed 2026-09-13 — it showed invented model
+  names like "OpenAI example A" that customers found confusing).
 - `api/cron/insights.js`: existing `CRON_SECRET` authentication, central daily
   refresh at 06:00 UTC. A database claim limits attempts to once per 24 hours;
   scheduler jitter may skip a day. One request, 20-second timeout, 8 MB limit,
@@ -84,11 +91,9 @@ modification time is treated as fetch time, never the benchmark observation date
 `npm run inspect:insights-source` fetches/prints public normalized evidence without
 database writes; supply a saved HTML pathname after `--` for offline inspection.
 
-Founder checks: switch between Your usage and Sample examples; expand evidence;
-check the period and unsupported-model explanation; resize to mobile; ensure each
-sample is marked fictional. Samples use invented model names, scores and prices
-for both providers and never affect totals, budgets or forecasts. Browser checks
-also exercise loading, missing usage, stale/source failures and request failures.
+Founder checks: expand evidence; check the period and unsupported-model
+explanation; resize to mobile. Browser checks also exercise loading, missing
+usage, stale/source failures and request failures.
 
 Local visual verification uses real public benchmark data with simulated usage,
 not a real signed-in customer account. Production migration/RLS enforcement and
