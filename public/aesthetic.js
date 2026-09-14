@@ -2,7 +2,7 @@ import { animate, stagger } from 'motion';
 import autoAnimate from '@formkit/auto-animate';
 import { computePosition, autoUpdate, offset, flip, shift } from '@floating-ui/dom';
 import confetti from 'canvas-confetti';
-import '@awesome.me/webawesome';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import '@awesome.me/webawesome/dist/styles/webawesome.css';
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -15,18 +15,28 @@ function observeLayout() {
 }
 
 function addTooltip(trigger) {
-  const content = trigger.dataset.tooltip;
+  const content = trigger.getAttribute('aria-label') || trigger.dataset.tooltip;
   if (!content || trigger.dataset.tooltipReady) return;
   trigger.dataset.tooltipReady = '1';
   const tip = document.createElement('wa-tooltip');
   tip.setAttribute('for', trigger.id);
+  tip.setAttribute('placement', 'top');
   tip.textContent = content;
   trigger.parentElement?.insertBefore(tip, trigger);
+  trigger.addEventListener('camaze-tooltip-update', () => {
+    tip.textContent = trigger.getAttribute('aria-label') || trigger.dataset.tooltip || '';
+  });
+}
+
+function refreshTooltipText(trigger) {
+  const tip = document.querySelector(`wa-tooltip[for="${CSS.escape(trigger.id)}"]`);
+  if (tip) tip.textContent = trigger.getAttribute('aria-label') || trigger.dataset.tooltip || '';
 }
 
 function setup() {
   observeLayout();
   document.querySelectorAll('[data-tooltip]').forEach(addTooltip);
+  document.querySelectorAll('[data-tooltip]').forEach(refreshTooltipText);
   if (!reduced) {
     document.querySelectorAll('.btn, .tabs a').forEach(el => {
       el.addEventListener('pointerenter', () => animate(el, { scale: 1.025 }, { duration: .15 }));

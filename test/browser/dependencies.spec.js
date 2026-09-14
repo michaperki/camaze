@@ -16,6 +16,13 @@ test('built chart supports filtering, theme, month navigation and an exact usage
   await page.goto('/dashboard.html');
   await expect(page.locator('.spend-chart svg')).toBeVisible();
   await expect(page.locator('.tabs svg')).toHaveCount(5);
+  const tooltip = page.locator('wa-tooltip[for="theme-toggle-btn"]');
+  await expect(tooltip).toHaveCount(1);
+  await expect(tooltip).toHaveJSProperty('open', false);
+  await page.getByRole('button', { name: 'Switch to dark theme' }).hover();
+  await expect(tooltip).toHaveJSProperty('open', true);
+  await page.mouse.move(300, 300);
+  await expect(tooltip).toHaveJSProperty('open', false);
   await page.getByRole('button', { name: 'OpenAI', exact: true }).click();
   await expect(page.getByRole('button', { name: 'OpenAI', exact: true })).toHaveAttribute('aria-pressed', 'false');
   await page.getByText('View daily usage data', { exact: true }).click();

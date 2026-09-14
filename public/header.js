@@ -43,6 +43,7 @@ import './aesthetic.js';
     btn.replaceChildren(createElement(dark ? Sun : Moon, { width: 17, height: 17, "aria-hidden": "true" }));
     btn.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
     btn.title = btn.getAttribute("aria-label");
+    btn.dispatchEvent(new Event("camaze-tooltip-update", { bubbles: true }));
   }
 
   function toggleTheme() {
@@ -77,7 +78,7 @@ import './aesthetic.js';
       `<nav class="tabs">${links}</nav>` +
       '<div class="header-right" id="header-right">' +
       '<span id="user-email"></span>' +
-      '<wa-tooltip content="Toggle color theme"><button id="theme-toggle-btn" data-tooltip="Toggle color theme" type="button"></button></wa-tooltip>' +
+      '<button id="theme-toggle-btn" data-tooltip="Toggle color theme" type="button"></button>' +
       '<button id="signout-btn" type="button">Sign out</button>' +
       "</div>" +
       "</div>";
