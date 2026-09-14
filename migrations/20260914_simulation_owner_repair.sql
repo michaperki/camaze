@@ -1,7 +1,7 @@
 begin;
 alter table public.simulation_environments drop constraint if exists simulation_environments_owner_id_check;
-alter table public.simulation_environments add constraint simulation_environments_owner_id_check check (owner_id = '0fdc87e0-60fc-4e48-af96-d363d92ad7a8');
 update public.simulation_environments set owner_id = '0fdc87e0-60fc-4e48-af96-d363d92ad7a8' where owner_id = 'ca0a2e00-0000-4000-8000-000000000001';
+alter table public.simulation_environments add constraint simulation_environments_owner_id_check check (owner_id = '0fdc87e0-60fc-4e48-af96-d363d92ad7a8');
 -- Existing restrictive policies contain the previous reserved UUID.
 do $$ declare r record; begin
   for r in select schemaname, tablename, policyname from pg_policies where policyname = 'exclude_system_simulation' loop
