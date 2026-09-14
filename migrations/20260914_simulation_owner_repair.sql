@@ -93,4 +93,33 @@ begin
   if not found then raise exception 'Stale simulation operation'; end if;
   return e;
 end $$;
+create or replace function public.simulation_begin(expected_revision bigint, reset_scenario boolean default false)
+returns public.simulation_environments language plpgsql security definer set search_path = public, pg_temp as $$
+declare e public.simulation_environments; t text;
+begin
+  select * into e from public.simulation_environments where owner_id='0fdc87e0-60fc-4e48-af96-d363d92ad7a8' for update;
+  if e.revision <> expected_revision then raise exception 'Simulation changed; refresh and retry'; end if;
+  if e.status='working' and (not reset_scenario or e.operation_started_at > now()-interval '10 minutes') then raise exception 'Simulation operation in progress'; end if;
+  if not reset_scenario and e.status <> 'ready' then raise exception 'Load/reset the scenario first'; end if;
+  update public.simulation_environments set revision=revision+1,status='working',operation=gen_random_uuid(),operation_started_at=now(),error=null
+    where owner_id=e.owner_id returning * into e;
+  if reset_scenario then
+    perform set_config('request.headers',jsonb_build_object('x-simulation-revision',e.revision::text,'x-simulation-operation',e.operation::text)::text,true);
+    foreach t in array array['entity_assignments','people','departments','daily_costs','monthly_attribution','cost_sync_state','user_fixed_costs','user_settings','user_notification_settings','alert_state','reconciliation_runs','simulation_messages'] loop
+      execute format('delete from public.%I where user_id=$1',t) using e.owner_id;
+    end loop;
+    update public.simulation_environments set business_now='2026-09-14T12:00:00Z',events='[]',playing=false where owner_id=e.owner_id returning * into e;
+  end if;
+  return e;
+end $$;
+create or replace function public.simulation_finish(expected_revision bigint, operation_id uuid, new_now timestamptz, new_events jsonb, new_playing boolean, failure text default null)
+returns public.simulation_environments language plpgsql security definer set search_path = public, pg_temp as $$
+declare e public.simulation_environments;
+begin
+  update public.simulation_environments set business_now=new_now,events=new_events,playing=new_playing and failure is null,
+    status=case when failure is null then 'ready' else 'error' end,error=failure,operation=null
+  where owner_id='0fdc87e0-60fc-4e48-af96-d363d92ad7a8' and revision=expected_revision and operation=operation_id returning * into e;
+  if not found then raise exception 'Stale simulation operation'; end if;
+  return e;
+end $$;
 commit;
