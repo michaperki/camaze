@@ -107,6 +107,17 @@ test("any row missing a token count poisons the whole savings aggregate, not jus
   assert.equal(result.insights.length, 1);
   assert.equal(result.insights[0].savings, undefined);
 });
+test("a row with explicit null token columns (Supabase's real shape for a missing breakdown) also poisons the aggregate, rather than being read as zero tokens", () => {
+  const s = scenario();
+  s.rows[0].input_tokens = null;
+  s.rows[0].output_tokens = null;
+  const result = recommend(s.rows, s.snapshot, now, s.config);
+  assert.equal(result.insights.length, 1);
+  // Regression: Number(null) === 0 previously passed the Number.isFinite
+  // check, so this row's real $10 of spend was "estimated" against 0
+  // tokens — a 0-cost, 100%-savings candidate rather than no estimate.
+  assert.equal(result.insights[0].savings, undefined);
+});
 function response() { return { code: 200, headers: {}, setHeader(k,v) { this.headers[k] = v; }, status(n) { this.code = n; return this; }, json(body) { this.body = body; return this; } }; }
 test("API derives tenant from verified token, ignores supplied user ID, rejects unauthenticated requests", async () => {
   const ids = [];
