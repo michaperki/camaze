@@ -2,13 +2,52 @@ const { test, expect } = require('@playwright/test');
 const path = require('node:path');
 const fs = require('node:fs');
 const output = '/tmp/camaze-insights-screenshots';
+test('reviewed current models, evaluated coverage and frozen evidence are visible', async ({ page }, info) => {
+  const catalog = require('../../lib/insights/catalog');
+  const snapshot = require('../../lib/insights/snapshot.json');
+  const now = new Date(snapshot.fetchedAt);
+  const pairs = [['openai', 'gpt-4o-2024-11-20'], ['openai', 'gpt-4o-mini-2024-07-18'],
+    ['anthropic', 'claude-sonnet-4-6'], ['anthropic', 'claude-haiku-4-5-20251001'], ['google', 'gemini-2.5-flash']];
+  const rows = pairs.map(([provider, model]) => ({ provider, model, amount_usd: 10,
+    date: new Date(+now - 86400000).toISOString().slice(0, 10) }));
+  const result = require('../../lib/insights/rules').recommend(rows, snapshot, now, catalog);
+  await page.route('**/api/insights', route => route.fulfill({ json: { ...result,
+    simulationKnowledge: { version: catalog.version, asOf: snapshot.fetchedAt },
+    source: { status: 'ok', origin: 'simulation', coverage: snapshot.coverage, fetchedAt: snapshot.fetchedAt, ageDays: 0 } } }));
+  await page.goto('/insights.html');
+  await expect(page.locator('#insights')).toContainText('GPT-5.6 Luna');
+  await expect(page.locator('#insights')).toContainText('Claude Sonnet 5');
+  await expect(page.locator('#insights')).toContainText('GPT-4.1 nano');
+  await expect(page.locator('.benchmark-configuration').first()).toContainText('Non-reasoning');
+  await expect(page.locator('#status')).toContainText('Simulation uses frozen evidence');
+  await expect(page.locator('#period')).toContainText('19/19 models');
+  await expect(page.locator('#coverage')).not.toContainText('not evaluated');
+  await page.getByText('5 models evaluated against reviewed alternatives', { exact: true }).click();
+  await expect(page.locator('#coverage')).toContainText('gemini-2.5-flash: 0 candidates from');
+  await expect(page.locator('#coverage')).toContainText('claude-haiku-4-5-20251001: 0 candidates from');
+  await page.locator('#coverage summary').filter({ hasText: 'gemini-2.5-flash:' }).click();
+  await expect(page.locator('#coverage')).toContainText('Gemini 3.8 Flash');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  fs.mkdirSync(output, { recursive: true });
+  await page.screenshot({ path: path.join(output, `${info.project.name}-current-models.png`), fullPage: true });
+});
+
+test('partial evidence is called out even when the refresh status is ok', async ({ page }) => {
+  await page.route('**/api/insights', route => route.fulfill({ json: {
+    period: { start: '2026-03-16', end: '2026-09-14' }, observedModels: 0, insights: [], unsupported: [], excluded: [],
+    source: { status: 'ok', coverage: { expected: 19, matched: 4, complete: false } },
+  } }));
+  await page.goto('/insights.html');
+  await expect(page.locator('#status')).toContainText('Benchmark coverage is incomplete (4/19 reviewed models)');
+});
+
 test('recorded-usage path renders coverage without overflow', async ({ page }, info) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/insights.html');
   await expect(page.locator('#status')).toContainText('No comparison available');
   await expect(page.locator('#coverage')).toContainText('gpt-4o-2024-11-20');
-  await expect(page.locator('#coverage')).toContainText('Exact model or version unsupported');
+  await expect(page.locator('#coverage')).toContainText('Model identifier not yet reviewed by Camaze');
   await expect(page.getByText('LOCAL PREVIEW:', { exact: false })).toBeVisible();
   fs.mkdirSync(output, { recursive: true });
   await page.screenshot({ path: path.join(output, `${info.project.name}-recorded.png`), fullPage: true });

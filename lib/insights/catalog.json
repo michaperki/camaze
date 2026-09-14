@@ -1,0 +1,509 @@
+{
+  "version": "2026-09-14.1",
+  "models": [
+    {
+      "provider": "openai",
+      "id": "gpt-4o-2024-11-20",
+      "name": "GPT-4o (November 2024)",
+      "benchmarkId": "c1045dc0-4fd3-4adb-9548-18763e0d051f",
+      "slug": "gpt-4o",
+      "input": 2.5,
+      "output": 10,
+      "context": 128000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "pricingSource": "https://developers.openai.com/api/docs/models/gpt-4o",
+      "compatibilitySource": "https://developers.openai.com/api/docs/models/gpt-4o",
+      "benchmarkName": "GPT-4o (Nov '24)",
+      "benchmarkReasoning": false,
+      "pricingNotes": "Standard text-token rates; caching, batch, service tiers and tool charges are excluded.",
+      "tokenEstimateSupported": true
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-4.1-2025-04-14",
+      "name": "GPT-4.1",
+      "benchmarkId": "3b608b70-6434-4baa-99ad-45d499703c67",
+      "slug": "gpt-4-1",
+      "input": 2,
+      "output": 8,
+      "context": 1047576,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "pricingSource": "https://developers.openai.com/api/docs/models/gpt-4.1",
+      "compatibilitySource": "https://developers.openai.com/api/docs/models/gpt-4.1",
+      "benchmarkName": "GPT-4.1",
+      "benchmarkReasoning": false,
+      "pricingNotes": "Standard text-token rates; caching, batch, service tiers and tool charges are excluded.",
+      "tokenEstimateSupported": true
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-opus-4-1-20250805",
+      "name": "Claude Opus 4.1",
+      "benchmarkId": "f2f60e3a-e5f5-4471-acd2-9f2f29c76007",
+      "slug": "claude-4-1-opus",
+      "input": 15,
+      "output": 75,
+      "context": 200000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": false,
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "pricingSource": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "compatibilitySource": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "benchmarkName": "Claude 4.1 Opus (Non-reasoning)",
+      "benchmarkReasoning": false,
+      "pricingNotes": "Standard text-token rates; caching, batch, service tiers and tool charges are excluded.",
+      "tokenEstimateSupported": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-opus-4-5-20251101",
+      "name": "Claude Opus 4.5",
+      "benchmarkId": "4077490a-bbfb-404e-979a-a97a20e3b5de",
+      "slug": "claude-opus-4-5",
+      "input": 5,
+      "output": 25,
+      "context": 200000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-11T00:00:00Z",
+      "pricingSource": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "compatibilitySource": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "benchmarkName": "Claude Opus 4.5 (Non-reasoning)",
+      "benchmarkReasoning": false,
+      "pricingNotes": "Standard text-token rates; caching, batch, service tiers and tool charges are excluded.",
+      "tokenEstimateSupported": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-4o-mini-2024-07-18",
+      "name": "GPT-4o mini",
+      "benchmarkId": "b5c1c91a-7474-4409-9a9c-9c2ac45d9eb6",
+      "slug": "gpt-4o-mini",
+      "input": 0.15,
+      "output": 0.6,
+      "context": 128000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-13T00:00:00Z",
+      "pricingSource": "https://developers.openai.com/api/docs/pricing",
+      "compatibilitySource": "https://developers.openai.com/api/docs/pricing",
+      "benchmarkName": "GPT-4o mini",
+      "benchmarkReasoning": false,
+      "pricingNotes": "Standard text-token rates; caching, batch, service tiers and tool charges are excluded.",
+      "tokenEstimateSupported": true
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-4.1-nano-2025-04-14",
+      "name": "GPT-4.1 nano",
+      "benchmarkId": "72c358fd-7d45-4d68-89aa-699743710924",
+      "slug": "gpt-4-1-nano",
+      "input": 0.1,
+      "output": 0.4,
+      "context": 1047576,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-13T00:00:00Z",
+      "pricingSource": "https://developers.openai.com/api/docs/pricing",
+      "compatibilitySource": "https://developers.openai.com/api/docs/pricing",
+      "benchmarkName": "GPT-4.1 nano",
+      "benchmarkReasoning": false,
+      "pricingNotes": "Standard text-token rates; caching, batch, service tiers and tool charges are excluded.",
+      "tokenEstimateSupported": true
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-haiku-4-5-20251001",
+      "name": "Claude Haiku 4.5",
+      "benchmarkId": "c2b1e769-7aee-4669-8076-73918bdebf6c",
+      "slug": "claude-4-5-haiku",
+      "input": 1,
+      "output": 5,
+      "context": 200000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-13T00:00:00Z",
+      "pricingSource": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "compatibilitySource": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "benchmarkName": "Claude 4.5 Haiku (Non-reasoning)",
+      "benchmarkReasoning": false,
+      "pricingNotes": "Standard text-token rates; caching, batch, service tiers and tool charges are excluded.",
+      "tokenEstimateSupported": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-5.6-luna",
+      "name": "GPT-5.6 Luna",
+      "slug": "gpt-5-6-luna-non-reasoning",
+      "input": 0.2,
+      "output": 1.2,
+      "context": 1050000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-14T00:00:00Z",
+      "pricingSource": "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
+      "compatibilitySource": "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
+      "benchmarkId": "dc64f856-3ded-497d-9527-d41d31267ed5",
+      "benchmarkName": "GPT-5.6 Luna (Non-reasoning)",
+      "benchmarkReasoning": false,
+      "pricingNotes": "Standard rates for prompts up to 272K input tokens. Longer prompts cost 2x input and 1.5x output; cache writes cost extra.",
+      "tokenEstimateSupported": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-5.6-terra",
+      "name": "GPT-5.6 Terra",
+      "slug": "gpt-5-6-terra-non-reasoning",
+      "input": 2,
+      "output": 12,
+      "context": 1050000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-14T00:00:00Z",
+      "pricingSource": "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
+      "compatibilitySource": "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
+      "benchmarkId": "9b97a35e-6ac7-44d9-91c6-422fa678963e",
+      "benchmarkName": "GPT-5.6 Terra (Non-reasoning)",
+      "benchmarkReasoning": false,
+      "pricingNotes": "Standard rates for prompts up to 272K input tokens. Longer prompts cost 2x input and 1.5x output; cache writes cost extra.",
+      "tokenEstimateSupported": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-5.6-sol",
+      "name": "GPT-5.6 Sol",
+      "slug": "gpt-5-6-sol-non-reasoning",
+      "input": 4,
+      "output": 20,
+      "context": 1050000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-14T00:00:00Z",
+      "pricingSource": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
+      "compatibilitySource": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
+      "benchmarkId": "7c4d1e30-6ecb-46cf-880c-41446d7b51f1",
+      "benchmarkName": "GPT-5.6 Sol (Non-reasoning)",
+      "benchmarkReasoning": false,
+      "pricingNotes": "Standard rates for prompts up to 272K input tokens. Longer prompts cost 2x input and 1.5x output; cache writes cost extra.",
+      "pricingValidUntil": "2026-11-22T00:00:00Z",
+      "tokenEstimateSupported": false
+    },
+    {
+      "provider": "openai",
+      "id": "gpt-6-astra",
+      "name": "GPT-6 Astra",
+      "slug": "gpt-6-astra-high",
+      "input": 10,
+      "output": 50,
+      "context": 1050000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-14T00:00:00Z",
+      "pricingSource": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+      "compatibilitySource": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+      "benchmarkId": "e05a4828-0536-4876-870d-a235023f992b",
+      "benchmarkName": "GPT-6 Astra (high)",
+      "benchmarkReasoning": true,
+      "pricingNotes": "Standard rates for prompts up to 272K input tokens. Longer prompts cost 2x input and 1.5x output; cache writes cost extra.",
+      "tokenEstimateSupported": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-sonnet-4-6",
+      "name": "Claude Sonnet 4.6",
+      "slug": "claude-sonnet-4-6",
+      "input": 3,
+      "output": 15,
+      "context": 1000000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-14T00:00:00Z",
+      "pricingSource": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "compatibilitySource": "https://platform.claude.com/docs/en/models/overview",
+      "benchmarkId": "2e40e695-3cec-43da-83f9-615af30b8e91",
+      "benchmarkName": "Claude Sonnet 4.6 (Non-reasoning, High Effort)",
+      "benchmarkReasoning": false,
+      "pricingNotes": "Standard text-token rates; caching, batch, service tiers and tool charges are excluded.",
+      "tokenEstimateSupported": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-sonnet-5",
+      "name": "Claude Sonnet 5",
+      "slug": "claude-sonnet-5-non-reasoning",
+      "input": 2,
+      "output": 10,
+      "context": 1000000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-14T00:00:00Z",
+      "pricingSource": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "compatibilitySource": "https://platform.claude.com/docs/en/models/overview",
+      "benchmarkId": "d58b9ada-fd9d-4fff-a086-242034657963",
+      "benchmarkName": "Claude Sonnet 5 (Non-reasoning, High Effort)",
+      "benchmarkReasoning": false,
+      "pricingNotes": "Standard text-token rates; caching, batch, service tiers and tool charges are excluded.",
+      "tokenEstimateSupported": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-opus-5",
+      "name": "Claude Opus 5",
+      "slug": "claude-opus-5-high",
+      "input": 5,
+      "output": 25,
+      "context": 1000000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-14T00:00:00Z",
+      "pricingSource": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "compatibilitySource": "https://platform.claude.com/docs/en/models/overview",
+      "benchmarkId": "712be54a-77ae-41b2-9a58-21181479d6ee",
+      "benchmarkName": "Claude Opus 5 (Adaptive Reasoning, High Effort)",
+      "benchmarkReasoning": true,
+      "pricingNotes": "Standard text-token rates; caching, batch, service tiers and tool charges are excluded.",
+      "tokenEstimateSupported": false
+    },
+    {
+      "provider": "anthropic",
+      "id": "claude-fable-5-1",
+      "name": "Claude Fable 5.1",
+      "slug": "claude-fable-5-1-high",
+      "input": 10,
+      "output": 50,
+      "context": 1000000,
+      "inputModalities": [
+        "text",
+        "image"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-14T00:00:00Z",
+      "pricingSource": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "compatibilitySource": "https://platform.claude.com/docs/en/models/overview",
+      "benchmarkId": "9d7d72cd-d95d-45a0-b109-4ad292c9aabd",
+      "benchmarkName": "Claude Fable 5.1 (Adaptive Reasoning, High Effort, Default Fallback)",
+      "benchmarkReasoning": true,
+      "pricingNotes": "Standard text-token rates; caching, batch, service tiers and tool charges are excluded.",
+      "tokenEstimateSupported": false
+    },
+    {
+      "provider": "google",
+      "id": "gemini-2.5-flash",
+      "name": "Gemini 2.5 Flash",
+      "slug": "gemini-2-5-flash",
+      "input": 0.3,
+      "output": 2.5,
+      "context": 1048576,
+      "inputModalities": [
+        "text",
+        "image",
+        "audio",
+        "video"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-14T00:00:00Z",
+      "pricingSource": "https://cloud.google.com/vertex-ai/generative-ai/pricing",
+      "compatibilitySource": "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash",
+      "benchmarkId": "6afbfb62-27e4-435e-9c85-d9fe1b92519e",
+      "benchmarkName": "Gemini 2.5 Flash (Non-reasoning)",
+      "benchmarkReasoning": false,
+      "pricingNotes": "Standard global Google Cloud text-token rates; regional endpoints and other modalities can cost more.",
+      "tokenEstimateSupported": false
+    },
+    {
+      "provider": "google",
+      "id": "gemini-3.5-flash-lite",
+      "name": "Gemini 3.5 Flash-Lite",
+      "slug": "gemini-3-5-flash-lite",
+      "input": 0.3,
+      "output": 2.5,
+      "context": 1048576,
+      "inputModalities": [
+        "text",
+        "image",
+        "audio",
+        "video"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-14T00:00:00Z",
+      "pricingSource": "https://cloud.google.com/vertex-ai/generative-ai/pricing",
+      "compatibilitySource": "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite",
+      "benchmarkId": "093b9df2-ebee-4309-943f-5a7e88360adf",
+      "benchmarkName": "Gemini 3.5 Flash-Lite",
+      "benchmarkReasoning": true,
+      "pricingNotes": "Standard global Google Cloud text-token rates; regional endpoints and other modalities can cost more.",
+      "tokenEstimateSupported": false
+    },
+    {
+      "provider": "google",
+      "id": "gemini-3.5-flash",
+      "name": "Gemini 3.5 Flash",
+      "slug": "gemini-3-5-flash-medium",
+      "input": 1.5,
+      "output": 9,
+      "context": 1048576,
+      "inputModalities": [
+        "text",
+        "image",
+        "audio",
+        "video"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-14T00:00:00Z",
+      "pricingSource": "https://cloud.google.com/vertex-ai/generative-ai/pricing",
+      "compatibilitySource": "https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash",
+      "benchmarkId": "5016ea75-7b0e-4737-a7e6-1062c6d90fd4",
+      "benchmarkName": "Gemini 3.5 Flash (medium)",
+      "benchmarkReasoning": true,
+      "pricingNotes": "Standard global Google Cloud text-token rates; regional endpoints and other modalities can cost more.",
+      "tokenEstimateSupported": false
+    },
+    {
+      "provider": "google",
+      "id": "gemini-3.8-flash",
+      "name": "Gemini 3.8 Flash",
+      "slug": "gemini-3-8-flash-medium",
+      "input": 0.75,
+      "output": 3.75,
+      "context": 1048576,
+      "inputModalities": [
+        "text",
+        "image",
+        "audio",
+        "video"
+      ],
+      "outputModalities": [
+        "text"
+      ],
+      "tools": true,
+      "available": true,
+      "reviewedAt": "2026-09-14T00:00:00Z",
+      "pricingSource": "https://cloud.google.com/vertex-ai/generative-ai/pricing",
+      "compatibilitySource": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
+      "benchmarkId": "744fa3c1-42a7-4995-b138-fb6be11f463c",
+      "benchmarkName": "Gemini 3.8 Flash (medium)",
+      "benchmarkReasoning": true,
+      "pricingNotes": "Standard global Google Cloud text-token rates; regional endpoints and other modalities can cost more.",
+      "pricingValidUntil": "2027-01-01T00:00:00Z",
+      "tokenEstimateSupported": false
+    }
+  ]
+}
