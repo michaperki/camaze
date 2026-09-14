@@ -78,7 +78,7 @@ test("missing/stale evidence, versions, availability and compatibility suppress 
     s => { s.config.models[1].tools = false; }, s => { s.config.models[1].inputModalities = []; }, s => { s.config.models[1].outputModalities = []; }];
   for (const mutate of mutations) { const s = scenario(); mutate(s); assert.equal(recommend(s.rows, s.snapshot, now, s.config).insights.length, 0); }
 });
-test("exact model IDs only, provider scoped, no dollars-based savings", () => {
+test("exact model IDs only, provider scoped, no dollars-based savings without token data", () => {
   const s = scenario();
   const result = recommend(s.rows, s.snapshot, now, s.config);
   assert.equal(result.insights.length, 1);
@@ -88,6 +88,24 @@ test("exact model IDs only, provider scoped, no dollars-based savings", () => {
     assert.equal(result.insights.length, 0); assert.equal(result.unsupported.length, 1);
   }
   assert.equal(recommend([{ ...s.rows[0], provider: "anthropic" }], s.snapshot, now, s.config).insights.length, 0);
+});
+test("computes exact dollar savings from the candidate's own rate applied to actual token counts", () => {
+  const s = scenario();
+  s.rows[0].input_tokens = 2_000_000;
+  s.rows[0].output_tokens = 500_000;
+  const result = recommend(s.rows, s.snapshot, now, s.config);
+  assert.equal(result.insights.length, 1);
+  // candidate: input $1.5/1M, output $6/1M -> 2*1.5 + 0.5*6 = $6 on the same usage.
+  assert.deepEqual(result.insights[0].savings, { actualCostUsd: 10, estimatedCandidateCostUsd: 6, savingsUsd: 4, savingsPct: 40 });
+});
+test("any row missing a token count poisons the whole savings aggregate, not just that row", () => {
+  const s = scenario();
+  s.rows[0].input_tokens = 2_000_000;
+  s.rows[0].output_tokens = 500_000;
+  s.rows.push({ date: "2026-09-09", provider: "openai", model: s.rows[0].model, amount_usd: 5 }); // no token fields
+  const result = recommend(s.rows, s.snapshot, now, s.config);
+  assert.equal(result.insights.length, 1);
+  assert.equal(result.insights[0].savings, undefined);
 });
 function response() { return { code: 200, headers: {}, setHeader(k,v) { this.headers[k] = v; }, status(n) { this.code = n; return this; }, json(body) { this.body = body; return this; } }; }
 test("API derives tenant from verified token, ignores supplied user ID, rejects unauthenticated requests", async () => {

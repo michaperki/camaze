@@ -136,39 +136,72 @@ async function fetchCosts(start, end, overrides = {}) {
   const accessToken = await getAccessToken(overrides.serviceAccountJson);
   const table = await findBillingTable(project, dataset, accessToken);
 
+  // Scopes the export to generative-AI billing lines only. Before this, the
+  // query read the *entire* GCP billing account for the project — any other
+  // service (storage, compute, tax, invoice rounding) landed in daily_costs
+  // labeled with whatever its sku.description happened to be, which is why
+  // things like "Tax"/"Rounding Error" could show up as "models." These are
+  // the two publicly documented service names for Gemini access (Vertex AI,
+  // and the standalone Generative Language API) — NOT verified against a
+  // real billing export from this environment. Before relying on this,
+  // confirm the real values with:
+  //   SELECT DISTINCT service.description FROM `<project>.<dataset>.<table>`
+  //   WHERE usage_start_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
+  // and adjust this list if it doesn't match.
+  const AI_SERVICES = ["Vertex AI", "Generative Language API"];
+
   // Daily total = cost + credits, converted to USD via the export's own
-  // conversion rate (1 for USD-billed accounts). All services for now.
-  // Grouped by model too (the closest thing to a "model" in billing export —
-  // e.g. specific Vertex AI/Gemini line items) so spend can be broken down
-  // per model alongside the daily totals, from the one query. Also grouped
-  // by project (id + display name) so the same query yields a per-project
-  // breakdown — this fans rows out further, but day/model totals below are
-  // summed across whatever rows come back, so they're unaffected.
+  // conversion rate (1 for USD-billed accounts). Grouped by model too (the
+  // closest thing to a "model" in billing export — e.g. specific Vertex
+  // AI/Gemini line items) so spend can be broken down per model alongside
+  // the daily totals, from the one query. Also grouped by project (id +
+  // display name) so the same query yields a per-project breakdown — this
+  // fans rows out further, but day/model totals below are summed across
+  // whatever rows come back, so they're unaffected.
   //
   // "model" prefers the goog-generativelanguage-model label over sku.description:
   // the Gemini API's input/output token SKUs each have their own description
-  // ("Generate content input token count gemini 3.5 flash text" vs "...output..."),
-  // which would otherwise fan a single model out into two unreadable rows. The
-  // label carries the same value on both, and is a compact slug (e.g.
-  // "gemini35flash") rather than free text — prettifyModel() on the dashboard
-  // reformats it. Falls back to sku.description when the label is absent
-  // (subscriptions, storage, and any other non-generative-API line item).
+  // ("Generate content input token count gemini 3.5 flash text" vs "...output...",
+  // or on Vertex AI Predictions, "<model> Text Input - Predictions" vs
+  // "...Text Output - Predictions"), which would otherwise fan a single model
+  // out into two unreadable, unmergeable rows. The label carries the same
+  // value on both, and is a compact slug (e.g. "gemini35flash") rather than
+  // free text — prettifyModel() on the dashboard reformats it. When the
+  // label is absent, REGEXP_REPLACE strips the confirmed Vertex-AI-Predictions
+  // direction suffix so the input/output rows collapse into the same group
+  // instead of fanning out (the older Generative-Language-API description
+  // format above isn't specially handled — those rows still merge on exact
+  // sku.description, i.e. no better/worse than before this change).
+  //
+  // Token counts: usage.amount alongside usage.unit, bucketed into input vs
+  // output by the same input/output wording already used above — evaluated
+  // per underlying row before the GROUP BY collapses them, so this works
+  // whether the group key came from the label or the regex-stripped
+  // description. Gated on usage.unit looking like "token(s)" so a
+  // differently-priced line (subscriptions, storage, anything non-token)
+  // can't silently populate a wrong-scale number. NOT verified against a
+  // real export from this environment — confirm usage.unit's actual value
+  // for a Gemini token line with the same diagnostic query above (add
+  // `, usage.unit, sku.description`) once deployed.
   const sql = `
     SELECT
       DATE(usage_start_time, 'UTC') AS day,
       COALESCE(
         (SELECT value FROM UNNEST(labels) WHERE key = 'goog-generativelanguage-model' LIMIT 1),
-        sku.description
+        REGEXP_REPLACE(sku.description, r'(?i)\\s*Text (Input|Output)\\s*-\\s*Predictions\\s*$', '')
       ) AS model,
       project.id AS project_id,
       project.name AS project_name,
       SUM(
         (cost + IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0))
         / IFNULL(currency_conversion_rate, 1)
-      ) AS amount_usd
+      ) AS amount_usd,
+      SUM(CASE WHEN REGEXP_CONTAINS(sku.description, r'(?i)\\binput\\b') AND LOWER(usage.unit) LIKE '%token%' THEN usage.amount ELSE 0 END) AS input_tokens,
+      SUM(CASE WHEN REGEXP_CONTAINS(sku.description, r'(?i)\\boutput\\b') AND LOWER(usage.unit) LIKE '%token%' THEN usage.amount ELSE 0 END) AS output_tokens
     FROM \`${project}.${dataset}.${table}\`
     WHERE usage_start_time >= TIMESTAMP('${start.toISOString()}')
       AND usage_start_time < TIMESTAMP('${end.toISOString()}')
+      AND service.description IN (${AI_SERVICES.map(s => `'${s}'`).join(", ")})
     GROUP BY day, model, project_id, project_name
     ORDER BY day`;
 
@@ -181,11 +214,12 @@ async function fetchCosts(start, end, overrides = {}) {
   }
 
   // Rows arrive as { f: [{ v: "2026-08-01" }, { v: "Gemini ..." }, { v: "my-project" },
-  // { v: "My Project" }, { v: "12.34" }] } — values are strings; coerce at the boundary.
+  // { v: "My Project" }, { v: "12.34" }, { v: "1000" }, { v: "200" }] } — values
+  // are strings; coerce at the boundary.
   const byDay = new Map();
   const byModel = new Map();
   const byProject = new Map(); // project_id -> { name, amount_usd }
-  const byDayModel = new Map(); // "date|model" -> amount_usd, since project fans day+model out
+  const byDayModel = new Map(); // "date|model" -> { amount_usd, input_tokens, output_tokens }
   for (const row of result.rows || []) {
     const date = row.f[0].v;
     const model = row.f[1].v;
@@ -195,11 +229,25 @@ async function fetchCosts(start, end, overrides = {}) {
     if (!Number.isFinite(amount)) {
       throw new Error(`Google returned a non-numeric amount for ${date}: ${JSON.stringify(row.f[4].v)}`);
     }
+    // Both land at exactly 0 whenever nothing on this row's underlying lines
+    // matched the token-unit gate above — indistinguishable from "really
+    // zero tokens." Since a real Gemini line always has tokens, this is
+    // treated as "couldn't confidently extract" rather than a true zero.
+    const rawInputTokens = Number(row.f[5]?.v ?? 0);
+    const rawOutputTokens = Number(row.f[6]?.v ?? 0);
+    const tokensUnavailable = amount > 0 && rawInputTokens === 0 && rawOutputTokens === 0;
+    const inputTokens = tokensUnavailable ? null : rawInputTokens;
+    const outputTokens = tokensUnavailable ? null : rawOutputTokens;
+
     byDay.set(date, (byDay.get(date) || 0) + amount);
     if (model) {
       byModel.set(model, (byModel.get(model) || 0) + amount);
       const dayModelKey = `${date}|${model}`;
-      byDayModel.set(dayModelKey, (byDayModel.get(dayModelKey) || 0) + amount);
+      const entry = byDayModel.get(dayModelKey) || { amount_usd: 0, input_tokens: null, output_tokens: null };
+      entry.amount_usd += amount;
+      if (inputTokens !== null) entry.input_tokens = (entry.input_tokens || 0) + inputTokens;
+      if (outputTokens !== null) entry.output_tokens = (entry.output_tokens || 0) + outputTokens;
+      byDayModel.set(dayModelKey, entry);
     }
     if (projectId) {
       const entry = byProject.get(projectId) || { name: projectName || projectId, amount_usd: 0 };
@@ -211,9 +259,9 @@ async function fetchCosts(start, end, overrides = {}) {
   return {
     days: [...byDay].map(([date, amount_usd]) => ({ date, provider: "google", amount_usd })),
     models: [...byModel].map(([model, amount_usd]) => ({ model, amount_usd })),
-    dayModels: [...byDayModel].map(([key, amount_usd]) => {
+    dayModels: [...byDayModel].map(([key, entry]) => {
       const sep = key.indexOf("|");
-      return { date: key.slice(0, sep), model: key.slice(sep + 1), amount_usd };
+      return { date: key.slice(0, sep), model: key.slice(sep + 1), ...entry };
     }),
     projects: [...byProject].map(([id, { name, amount_usd }]) => ({ id, name, amount_usd })),
   };

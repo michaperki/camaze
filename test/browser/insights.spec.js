@@ -61,6 +61,32 @@ test('estimated published scores render with per-score labels', async ({ page })
   await expect(page.locator('.insight')).toHaveCount(1);
   await expect(page.locator('.metric-grid strong.candidate').first()).toContainText('Estimated by Artificial Analysis');
   await expect(page.getByText('Estimated by Artificial Analysis', { exact: true })).toHaveCount(1);
-  await expect(page.locator('.reason')).toContainText('Higher AA Intelligence Index score');
+  await expect(page.locator('.reason')).toContainText('Higher benchmark score and ~20% lower published token pricing');
+  await expect(page.locator('.savings')).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('a comparison with a real token breakdown renders the dollar savings block', async ({ page }) => {
+  const data = {
+    period: { start: '2026-03-13', end: '2026-09-11' },
+    observedModels: 1,
+    unsupported: [],
+    excluded: [],
+    usageSyncedAt: null,
+    source: { status: 'ok', fetchedAt: '2026-09-11T00:00:00Z', ageDays: 0.5, lastAttemptAt: '2026-09-11T00:00:00Z' },
+    insights: [{
+      current: { provider: 'openai', id: 'gpt-4o-mini-2024-07-18', name: 'GPT-4o mini', input: 0.15, output: 0.6, context: 128000, pricingSource: 'https://developers.openai.com/api/docs/pricing', reviewedAt: '2026-09-13T00:00:00Z' },
+      candidate: { provider: 'openai', id: 'gpt-4.1-nano-2025-04-14', name: 'GPT-4.1 nano', input: 0.1, output: 0.4, context: 1047576, pricingSource: 'https://developers.openai.com/api/docs/pricing', reviewedAt: '2026-09-13T00:00:00Z' },
+      benchmark: { version: '4.3', current: 6.66, candidate: 7.82, currentEstimated: true, candidateEstimated: true, currentSource: 'https://artificialanalysis.ai/models/gpt-4o-mini', candidateSource: 'https://artificialanalysis.ai/models/gpt-4-1-nano', observedAt: null, candidateObservedAt: null },
+      usage: { provider: 'openai', model: 'gpt-4o-mini-2024-07-18', firstSeen: '2026-09-09', lastSeen: '2026-09-10' },
+      savings: { actualCostUsd: 10, estimatedCandidateCostUsd: 6.67, savingsUsd: 3.33, savingsPct: 33.3 },
+      fetchedAt: '2026-09-11T00:00:00Z',
+    }],
+  };
+  await page.route('**/api/insights', route => route.fulfill({ json: data }));
+  await page.goto('/insights.html');
+  await expect(page.locator('.savings-headline')).toContainText('Estimated savings: $3.33 (33%)');
+  await expect(page.locator('.savings-detail')).toContainText('actual spend $10.00');
+  await expect(page.locator('.savings-detail')).toContainText('estimated on GPT-4.1 nano $6.67');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

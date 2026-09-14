@@ -6,13 +6,26 @@ const timing = require("../lib/timing");
 const ORG_BASE = "https://api.anthropic.com/v1/organizations";
 const API_URL = `${ORG_BASE}/cost_report`;
 
-// `start`/`end`: Date objects, end exclusive. `keyOverride`: use this key
-// instead of the env var (per-user keys). Throws on missing key or API
-// error. Returns { days, models } — both derived from the same request.
-async function fetchCosts(start, end, keyOverride) {
-  const key = keyOverride || process.env.ANTHROPIC_ADMIN_KEY;
-  if (!key) throw new Error("ANTHROPIC_ADMIN_KEY is not set in .env");
+// Same reduction estimateDayFromUsage() applies per key — collapsed here
+// into a shared helper since fetchUsageTotalsByDay needs the identical
+// arithmetic at the (date, model) level instead of (date, api_key). Cache
+// read/write and uncached input are folded into one inputTokens number
+// because lib/insights/catalog.js has no separate cache price to apply to
+// them anyway — same simplification estimateDayFromUsage already made.
+function sumTokens(item) {
+  const inputTokens =
+    (item.uncached_input_tokens || 0) +
+    (item.cache_read_input_tokens || 0) +
+    (item.cache_creation?.ephemeral_1h_input_tokens || 0) +
+    (item.cache_creation?.ephemeral_5m_input_tokens || 0);
+  const outputTokens = item.output_tokens || 0;
+  return { inputTokens, outputTokens };
+}
 
+// The cost_report pagination loop that used to live directly in fetchCosts,
+// extracted so fetchCosts can run it alongside fetchUsageTotalsByDay instead
+// of sequentially.
+async function fetchCostReportTotals(start, end, key) {
   const centsByDay = new Map();
   const centsByModel = new Map();
   const centsByDayModel = new Map(); // day -> Map(model -> cents)
@@ -64,10 +77,85 @@ async function fetchCosts(start, end, keyOverride) {
     page = body.has_more ? body.next_page : null;
   } while (page);
 
+  return { centsByDay, centsByModel, centsByDayModel };
+}
+
+// usage_report/messages, grouped by model/service_tier/context_window only
+// (no api_key_id) — daily_costs is keyed by model, not by API key, so
+// fetchUsageByDay's per-key breakdown (used for attribution) isn't reusable
+// here without a bigger refactor of how fetchCosts/fetchAttribution share
+// data. One extra paginated call per sync. Best-effort: a failure here must
+// never take down the dollar sync fetchCosts exists for, so callers treat
+// a thrown error as "no token data this sync" rather than propagating it.
+async function fetchUsageTotalsByDay(start, end, key) {
+  const byDay = new Map(); // date -> Map(model -> { inputTokens, outputTokens })
+  let page = null;
+  do {
+    const params = new URLSearchParams({
+      starting_at: start.toISOString(),
+      ending_at: end.toISOString(),
+      bucket_width: "1d",
+      limit: "31",
+    });
+    params.append("group_by[]", "model");
+    params.append("group_by[]", "service_tier");
+    params.append("group_by[]", "context_window");
+    if (page) params.set("page", page);
+
+    const res = await timing.mark("anthropic:usage_report_totals_request", () => fetch(`${ORG_BASE}/usage_report/messages?${params}`, {
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
+    }));
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(body?.error?.message || `HTTP ${res.status} from Anthropic API (usage_report)`);
+    }
+
+    for (const bucket of body.data || []) {
+      const date = bucket.starting_at.slice(0, 10);
+      const dayMap = byDay.get(date) || new Map();
+      for (const item of bucket.results || []) {
+        if (!item.model) continue;
+        const { inputTokens, outputTokens } = sumTokens(item);
+        const entry = dayMap.get(item.model) || { inputTokens: 0, outputTokens: 0 };
+        entry.inputTokens += inputTokens;
+        entry.outputTokens += outputTokens;
+        dayMap.set(item.model, entry);
+      }
+      byDay.set(date, dayMap);
+    }
+    page = body.has_more ? body.next_page : null;
+  } while (page);
+
+  return byDay;
+}
+
+// `start`/`end`: Date objects, end exclusive. `keyOverride`: use this key
+// instead of the env var (per-user keys). Throws on missing key or API
+// error. Returns { days, models, dayModels } — all derived from the same
+// cost_report request, plus a best-effort token breakdown per dayModels
+// entry (null/null if the usage_report side failed or had no matching row).
+async function fetchCosts(start, end, keyOverride) {
+  const key = keyOverride || process.env.ANTHROPIC_ADMIN_KEY;
+  if (!key) throw new Error("ANTHROPIC_ADMIN_KEY is not set in .env");
+
+  const [{ centsByDay, centsByModel, centsByDayModel }, usageTotalsByDay] = await Promise.all([
+    fetchCostReportTotals(start, end, key),
+    fetchUsageTotalsByDay(start, end, key).catch(error => {
+      console.error(`[anthropic] usage_report token fetch failed, dayModels will have no token counts: ${error.message}`);
+      return new Map();
+    }),
+  ]);
+
   const dayModels = [];
   for (const [date, dayMap] of centsByDayModel) {
+    const usageForDay = usageTotalsByDay.get(date);
     for (const [model, cents] of dayMap) {
-      dayModels.push({ date, model, amount_usd: cents / 100 });
+      const tokens = usageForDay?.get(model);
+      dayModels.push({
+        date, model, amount_usd: cents / 100,
+        input_tokens: tokens?.inputTokens ?? null,
+        output_tokens: tokens?.outputTokens ?? null,
+      });
     }
   }
 
@@ -325,12 +413,7 @@ function estimateDayFromUsage(usageRows) {
   for (const item of usageRows) {
     // Workbench usage has no api_key_id — nothing to attribute it to.
     if (!item.api_key_id) continue;
-    const inputTokens =
-      (item.uncached_input_tokens || 0) +
-      (item.cache_read_input_tokens || 0) +
-      (item.cache_creation?.ephemeral_1h_input_tokens || 0) +
-      (item.cache_creation?.ephemeral_5m_input_tokens || 0);
-    const outputTokens = item.output_tokens || 0;
+    const { inputTokens, outputTokens } = sumTokens(item);
 
     const entry = byKey.get(item.api_key_id) || {
       amountUsd: 0,
@@ -575,5 +658,5 @@ module.exports = {
   name: "anthropic", label: "Anthropic", fetchCosts, validateKey, fetchAttribution,
   // Exported additionally for tests only — not part of the provider
   // interface other modules should call.
-  _internal: { splitByShare, allocateDayFromCostReport, estimateDayFromUsage, fetchApiKeyAllocation },
+  _internal: { splitByShare, allocateDayFromCostReport, estimateDayFromUsage, fetchApiKeyAllocation, sumTokens, fetchUsageTotalsByDay },
 };

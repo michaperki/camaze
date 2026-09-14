@@ -4,13 +4,33 @@
 
 An authenticated, read-only page compares exact model IDs in the customer's last
 182 complete UTC days (~6 months) of recorded usage. It does not fetch provider
-usage, change models, calculate personal savings, or write customer records.
-Existing cost sync continues to populate `daily_costs`. General comparisons
-require a higher published AA Intelligence Index score and input/output rates
-that are both no higher, with at least one strictly lower. Discounts, caching
-and completed-task costs are not estimated. Context, input/output modalities and
-tool support must not regress; billing records cannot establish application
-requirements or reasoning settings.
+usage, change models, or write customer records. Existing cost sync continues to
+populate `daily_costs`. General comparisons require a higher published AA
+Intelligence Index score and input/output rates that are both no higher, with at
+least one strictly lower. Discounts, caching and completed-task costs are not
+estimated. Context, input/output modalities and tool support must not regress;
+billing records cannot establish application requirements or reasoning settings.
+
+**Dollar savings (added 2026-09-13)**: when every `daily_costs` row behind a
+comparison carries a token breakdown (see below), the card also shows an exact
+"Estimated savings: $Z (N%)" figure — the candidate's own published rate applied
+to the customer's actual observed input/output token counts, not an approximation
+from a blended dollar total. If even one contributing row lacks a token
+breakdown (pre-migration data, or a provider gap), the dollar figure is omitted
+entirely rather than partially computed — the comparison still renders with its
+qualitative reason sentence, just without a $ claim it can't back up.
+
+Token counts are captured per (date, model) in `daily_costs.input_tokens` /
+`output_tokens` (`migrations/20260913_daily_costs_tokens.sql`), sourced
+per-provider: Anthropic via a purpose-built `usage_report/messages` call
+(`providers/anthropic.js`'s `fetchUsageTotalsByDay`); OpenAI via the separate
+Usage API, `/v1/organization/usage/completions` (`fetchUsageTokensByDay`);
+Google via `usage.amount` already present in the billing export, gated on
+`usage.unit` looking like a token count. All three are best-effort: a failure
+fetching tokens degrades to `null` token columns for that sync rather than
+breaking the underlying dollar sync. Historical months need a re-sync
+(`POST /api/costs`, the existing 6-month backfill) after this migration lands
+before they'll have a token breakdown to show savings from.
 
 The reviewed pairs are GPT-4o (2024-11-20) to GPT-4.1 (2025-04-14), GPT-4o mini
 (2024-07-18) to GPT-4.1 nano (2025-04-14), and Claude Opus 4.1 to Opus 4.5.

@@ -5,13 +5,9 @@ const timing = require("../lib/timing");
 const ORG_BASE = "https://api.openai.com/v1/organization";
 const API_URL = `${ORG_BASE}/costs`;
 
-// `start`/`end`: Date objects, end exclusive. `keyOverride`: use this key
-// instead of the env var (per-user keys). Throws on missing key or API
-// error. Returns { days, models } — both derived from the same request.
-async function fetchCosts(start, end, keyOverride) {
-  const key = keyOverride || process.env.OPENAI_ADMIN_KEY;
-  if (!key) throw new Error("OPENAI_ADMIN_KEY is not set in .env");
-
+// The costs pagination loop, extracted so fetchCosts can run it alongside
+// fetchUsageTokensByDay instead of sequentially.
+async function fetchCostTotals(start, end, key) {
   const usdByDay = new Map();
   const usdByModel = new Map();
   const usdByDayModel = new Map(); // day -> Map(model -> usd)
@@ -66,10 +62,92 @@ async function fetchCosts(start, end, keyOverride) {
     page = body.has_more ? body.next_page : null;
   } while (page);
 
+  return { usdByDay, usdByModel, usdByDayModel };
+}
+
+// GET /v1/organization/usage/completions, grouped by model only. The Costs
+// API above never returns token counts (only amount.value) — this is a
+// genuinely separate endpoint/call. Its `input_tokens` already includes
+// cached and cache-write tokens per OpenAI's docs, so unlike Anthropic's
+// usage_report there's no sub-field summation needed here.
+//
+// Assumes this endpoint's `model` field matches the Costs API's
+// `line_item.split(",")[0]` model prefix exactly (both are admin endpoints
+// on the same org) — not verified against a live account from this
+// environment; confirm on first real deploy.
+//
+// Best-effort: a failure here must never take down the dollar sync
+// fetchCosts exists for, so callers treat a thrown error as "no token data
+// this sync" rather than propagating it.
+async function fetchUsageTokensByDay(start, end, key) {
+  const byDay = new Map(); // date -> Map(model -> { inputTokens, outputTokens })
+  let page = null;
+  do {
+    const params = new URLSearchParams({
+      start_time: String(Math.floor(start.getTime() / 1000)),
+      end_time: String(Math.floor(end.getTime() / 1000)),
+      bucket_width: "1d",
+      limit: "31",
+    });
+    params.append("group_by", "model");
+    if (page) params.set("page", page);
+
+    const res = await timing.mark("openai:usage_completions_request", () => fetch(`${ORG_BASE}/usage/completions?${params}`, {
+      headers: { Authorization: `Bearer ${key}` },
+    }));
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(body?.error?.message || `HTTP ${res.status} from OpenAI API (usage)`);
+    }
+
+    for (const bucket of body.data || []) {
+      const day = new Date(bucket.start_time * 1000).toISOString().slice(0, 10);
+      const dayMap = byDay.get(day) || new Map();
+      for (const item of bucket.results || []) {
+        if (!item.model) continue;
+        const inputTokens = Number(item.input_tokens ?? 0);
+        const outputTokens = Number(item.output_tokens ?? 0);
+        if (!Number.isFinite(inputTokens) || !Number.isFinite(outputTokens)) continue;
+        const entry = dayMap.get(item.model) || { inputTokens: 0, outputTokens: 0 };
+        entry.inputTokens += inputTokens;
+        entry.outputTokens += outputTokens;
+        dayMap.set(item.model, entry);
+      }
+      byDay.set(day, dayMap);
+    }
+    page = body.has_more ? body.next_page : null;
+  } while (page);
+
+  return byDay;
+}
+
+// `start`/`end`: Date objects, end exclusive. `keyOverride`: use this key
+// instead of the env var (per-user keys). Throws on missing key or API
+// error. Returns { days, models, dayModels } — all derived from the Costs
+// API, plus a best-effort token breakdown per dayModels entry (null/null if
+// the usage endpoint failed or had no matching row).
+async function fetchCosts(start, end, keyOverride) {
+  const key = keyOverride || process.env.OPENAI_ADMIN_KEY;
+  if (!key) throw new Error("OPENAI_ADMIN_KEY is not set in .env");
+
+  const [{ usdByDay, usdByModel, usdByDayModel }, usageTokensByDay] = await Promise.all([
+    fetchCostTotals(start, end, key),
+    fetchUsageTokensByDay(start, end, key).catch(error => {
+      console.error(`[openai] usage token fetch failed, dayModels will have no token counts: ${error.message}`);
+      return new Map();
+    }),
+  ]);
+
   const dayModels = [];
   for (const [date, dayMap] of usdByDayModel) {
+    const usageForDay = usageTokensByDay.get(date);
     for (const [model, usd] of dayMap) {
-      dayModels.push({ date, model, amount_usd: usd });
+      const tokens = usageForDay?.get(model);
+      dayModels.push({
+        date, model, amount_usd: usd,
+        input_tokens: tokens?.inputTokens ?? null,
+        output_tokens: tokens?.outputTokens ?? null,
+      });
     }
   }
 
@@ -213,4 +291,9 @@ async function fetchAttribution(start, end, keyOverride) {
   return rows;
 }
 
-module.exports = { name: "openai", label: "OpenAI", fetchCosts, validateKey, fetchAttribution };
+module.exports = {
+  name: "openai", label: "OpenAI", fetchCosts, validateKey, fetchAttribution,
+  // Exported additionally for tests only — not part of the provider
+  // interface other modules should call.
+  _internal: { fetchUsageTokensByDay },
+};
