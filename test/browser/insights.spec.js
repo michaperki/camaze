@@ -48,3 +48,20 @@ test('loading, no usage, source failure and request failure states', async ({ pa
   await page.getByLabel('Sample examples', { exact: true }).check();
   await expect(page.locator('.insight')).toHaveCount(2);
 });
+
+test('estimated published scores render with per-score labels', async ({ page }) => {
+  const { sampleInsights } = require('../../lib/insights/samples');
+  const data = sampleInsights();
+  data.sample = false;
+  data.source.status = 'ok';
+  data.insights = data.insights.slice(0, 1);
+  data.insights[0].benchmark.currentEstimated = false;
+  data.insights[0].benchmark.candidateEstimated = true;
+  await page.route('**/api/insights', route => route.fulfill({ json: data }));
+  await page.goto('/insights.html');
+  await expect(page.locator('.insight')).toHaveCount(1);
+  await expect(page.locator('.metric-grid strong.candidate').first()).toContainText('Estimated by Artificial Analysis');
+  await expect(page.getByText('Estimated by Artificial Analysis', { exact: true })).toHaveCount(1);
+  await expect(page.locator('.reason')).toContainText('Higher AA Intelligence Index score');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

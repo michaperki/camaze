@@ -59,10 +59,10 @@ test("strict price dominance allows one equal price, never higher prices or equa
     assert.equal(recommend(s.rows, s.snapshot, now, s.config).insights.length, expected);
   }
 });
-test("missing/stale/estimated evidence, versions, availability and compatibility suppress comparisons", () => {
+test("missing/stale evidence, versions, availability and compatibility suppress comparisons", () => {
   const mutations = [s => { s.snapshot = null; }, s => { s.snapshot.fetchedAt = "2026-09-01"; }, s => { s.snapshot.fetchedAt = "2027-01-01"; },
     s => { s.snapshot.records[1].score = null; }, s => { s.snapshot.records[1].score = 32; }, s => { s.snapshot.records[1].version = "different"; },
-    s => { s.snapshot.records[0].estimated = true; }, s => { s.config.models[1].available = false; }, s => { s.config.models[1].available = null; },
+    s => { s.config.models[1].available = false; }, s => { s.config.models[1].available = null; },
     s => { s.config.models[1].input = null; }, s => { s.config.models[1].reviewedAt = "2026-01-01"; }, s => { s.config.models[1].context = 100; },
     s => { s.config.models[1].tools = false; }, s => { s.config.models[1].inputModalities = []; }, s => { s.config.models[1].outputModalities = []; }];
   for (const mutate of mutations) { const s = scenario(); mutate(s); assert.equal(recommend(s.rows, s.snapshot, now, s.config).insights.length, 0); }
@@ -118,4 +118,18 @@ test("cron rejects unauthenticated refresh requests without writing", async () =
   const res = response();
   await cron({ method: "GET", headers: {} }, res);
   assert.equal(res.code, 401);
+});
+
+test("published estimated scores remain eligible and preserve each score's status", () => {
+  for (const [current, candidate] of [[true, true], [true, false], [false, true], [null, true]]) {
+    const s = scenario();
+    s.snapshot.records[0].estimated = current;
+    s.snapshot.records[1].estimated = candidate;
+    const result = recommend(s.rows, s.snapshot, now, s.config);
+    assert.equal(result.insights.length, 1);
+    assert.equal(result.insights[0].benchmark.currentEstimated, current);
+    assert.equal(result.insights[0].benchmark.candidateEstimated, candidate);
+    s.snapshot.records[1].score = null;
+    assert.equal(recommend(s.rows, s.snapshot, now, s.config).insights.length, 0);
+  }
 });

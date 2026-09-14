@@ -18,14 +18,15 @@ function renderInsights(data) {
   document.getElementById("period").textContent = `${data.sample ? "Example" : "Recorded usage"} window: ${data.period.start} to ${data.period.end} (end exclusive, UTC).` + (data.source.fetchedAt ? ` Benchmark snapshot: ${stamp(data.source.fetchedAt)}.` : "");
   document.getElementById("insights").innerHTML = data.insights.map(item => {
     const { current: a, candidate: b, benchmark: bm, usage } = item;
+    const scoreLabel = estimated => data.sample ? "" : estimated === true ? "<br><small>Estimated by Artificial Analysis</small>" : estimated === false ? "" : "<br><small>Measurement status unavailable</small>";
     return `<article class="insight">
       <div class="insight-top"><span class="eyebrow">${escapeHtml(a.provider.toUpperCase())} &middot; ${data.sample ? "FICTIONAL SAMPLE" : "SAME-PROVIDER COMPARISON"}</span>
       <div class="model-pair"><div><p>You used</p><h2>${escapeHtml(a.name)}</h2></div><span class="arrow" aria-hidden="true">&rarr;</span><div><p class="candidate">Worth evaluating</p><h2>${escapeHtml(b.name)}</h2></div></div></div>
       <div class="metric-grid"><span></span><span>Current model</span><span>Candidate</span>
-        <span>${data.sample ? "Example index" : "AA Intelligence Index"} (${escapeHtml(bm.version)})</span><strong>${bm.current.toFixed(1)}</strong><strong class="candidate">${bm.candidate.toFixed(1)}</strong>
+        <span>${data.sample ? "Example index" : "AA Intelligence Index"} (${escapeHtml(bm.version)})</span><strong>${bm.current.toFixed(1)}${scoreLabel(bm.currentEstimated)}</strong><strong class="candidate">${bm.candidate.toFixed(1)}${scoreLabel(bm.candidateEstimated)}</strong>
         <span>Input / 1M tokens</span><strong>${price(a.input)}</strong><strong class="candidate">${price(b.input)}</strong>
         <span>Output / 1M tokens</span><strong>${price(a.output)}</strong><strong class="candidate">${price(b.output)}</strong></div>
-      <p class="reason">Higher ${data.sample ? "example" : "measured benchmark"} score. Neither published token rate is higher, and at least one is lower. It may be worth evaluating on your own tasks.</p>
+      <p class="reason">Higher ${data.sample ? "example" : "AA Intelligence Index"} score. Neither published token rate is higher, and at least one is lower. It may be worth evaluating on your own tasks.</p>
       <details><summary>Evidence, freshness &amp; limitations</summary>
         <p>Observed ${escapeHtml(usage.firstSeen)} through ${escapeHtml(usage.lastSeen)}. Exact identifiers: ${escapeHtml(a.id)} &rarr; ${escapeHtml(b.id)}.</p>
         <p>${sourceLink(bm.currentSource, "Current benchmark")} &middot; ${sourceLink(bm.candidateSource, "Candidate benchmark")}<br>Snapshot fetched: ${data.sample ? "Fictional sample" : stamp(item.fetchedAt)}. Evaluation observation dates: ${stamp(bm.observedAt)} / ${stamp(bm.candidateObservedAt)}.</p>

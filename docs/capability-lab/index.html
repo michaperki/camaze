@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Camaze Capability Lab</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside class="side-nav" aria-label="Section navigation">
+    <a class="brand" href="#top">Camaze Capability Lab</a>
+    <nav>
+      <a href="#summary">Current State</a>
+      <a href="#providers">Data Sources</a>
+      <a href="#attribution">Attribution Explorer</a>
+      <a href="#simulator">Simulator</a>
+      <a href="#raw">Raw Response Lab</a>
+      <a href="#methods">Methods</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#glossary">Glossary</a>
+      <a href="#confidence">Confidence</a>
+      <a href="#claims">Claim Audit</a>
+      <a href="#roadmap">Roadmap</a>
+    </nav>
+    <button id="reset-filters" type="button">Reset filters</button>
+  </aside>
+
+  <main id="top">
+    <section class="hero" id="summary">
+      <div>
+        <p class="eyebrow">Internal reference · not marketing copy</p>
+        <h1>What can Camaze know, where does it come from, and what must a customer configure?</h1>
+        <p class="lede">This internal lab covers the current billing-source model, provider requirements, attribution boundaries, sanitized raw response shapes, capture-method tradeoffs, architecture options, terminology, confidence categories, claim boundaries, and a compact roadmap.</p>
+      </div>
+      <div class="summary-card">
+        <h2>Current State</h2>
+        <ul id="summary-list"></ul>
+      </div>
+    </section>
+
+    <section class="legend-panel" aria-labelledby="legend-heading">
+      <h2 id="legend-heading">Status Legend</h2>
+      <div id="status-legend" class="legend-grid"></div>
+    </section>
+
+    <section class="toolbar" aria-label="Filters">
+      <label>
+        Search
+        <input id="search" type="search" placeholder="provider, workflow, admin key, project...">
+      </label>
+      <label>
+        Provider
+        <select id="provider-filter">
+          <option value="all">All providers</option>
+        </select>
+      </label>
+      <label>
+        Status
+        <select id="status-filter">
+          <option value="all">All statuses</option>
+        </select>
+      </label>
+      <label>
+        Confidence
+        <select id="confidence-filter">
+          <option value="all">All confidence</option>
+        </select>
+      </label>
+      <label>
+        Connection
+        <select id="connection-filter">
+          <option value="all">All methods</option>
+        </select>
+      </label>
+    </section>
+
+    <section id="providers" class="panel">
+      <div class="section-head">
+        <p class="eyebrow">Data Source Explorer</p>
+        <h2>Provider support and credential requirements</h2>
+      </div>
+      <div id="provider-tabs" class="tabs" role="tablist"></div>
+      <div id="provider-detail"></div>
+    </section>
+
+    <section id="attribution" class="panel">
+      <div class="section-head">
+        <p class="eyebrow">Attribution Explorer</p>
+        <h2>Current dimensions and confidence</h2>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Dimension</th>
+              <th>Status</th>
+              <th>Origin</th>
+              <th>Connection</th>
+              <th>Confidence</th>
+              <th>Storage</th>
+              <th>UI</th>
+            </tr>
+          </thead>
+          <tbody id="dimension-table"></tbody>
+        </table>
+      </div>
+      <div id="dimension-detail" class="detail-drawer" hidden></div>
+    </section>
+
+    <section id="simulator" class="panel">
+      <div class="section-head">
+        <p class="eyebrow">Can Camaze Attribute This?</p>
+        <h2>Least-invasive attribution path</h2>
+      </div>
+      <div class="simulator-grid">
+        <div class="simulator-form">
+          <label>
+            Desired attribution
+            <select id="sim-dimension"></select>
+          </label>
+          <label>
+            Provider
+            <select id="sim-provider"></select>
+          </label>
+          <fieldset>
+            <legend>Available customer setup</legend>
+            <div id="sim-setup"></div>
+          </fieldset>
+        </div>
+        <div id="sim-result" class="sim-result"></div>
+      </div>
+    </section>
+
+    <section id="raw" class="panel">
+      <div class="section-head">
+        <p class="eyebrow">Raw Response Laboratory</p>
+        <h2>Sanitized provider shapes and retained fields</h2>
+      </div>
+      <div id="raw-list" class="raw-grid"></div>
+    </section>
+
+    <section id="methods" class="panel">
+      <div class="section-head">
+        <p class="eyebrow">Billing versus telemetry versus gateway</p>
+        <h2>Capture methods and tradeoffs</h2>
+      </div>
+      <div id="method-tabs" class="tabs" role="tablist"></div>
+      <div class="method-grid">
+        <div id="method-detail"></div>
+        <div id="method-flow" class="flow-card" aria-label="Selected data flow"></div>
+      </div>
+    </section>
+
+    <section id="architecture" class="panel">
+      <div class="section-head">
+        <p class="eyebrow">Architecture</p>
+        <h2>Current implementation and potential future additions</h2>
+      </div>
+      <div class="tabs" role="tablist">
+        <button type="button" data-arch-mode="current" aria-selected="true">Current</button>
+        <button type="button" data-arch-mode="future" aria-selected="false">Future overlay</button>
+      </div>
+      <div id="architecture-view"></div>
+    </section>
+
+    <section id="glossary" class="panel">
+      <div class="section-head">
+        <p class="eyebrow">Terminology guide</p>
+        <h2>Terms that need precise usage</h2>
+      </div>
+      <div id="glossary-list" class="glossary-grid"></div>
+    </section>
+
+    <section id="confidence" class="panel">
+      <div class="section-head">
+        <p class="eyebrow">Attribution confidence model</p>
+        <h2>Confidence is categorical, not a fake percentage</h2>
+      </div>
+      <div id="confidence-list" class="confidence-list"></div>
+    </section>
+
+    <section id="claims" class="panel warning-panel">
+      <div class="section-head">
+        <p class="eyebrow">Internal — Not Marketing Copy</p>
+        <h2>Current product claim audit</h2>
+      </div>
+      <div id="claim-list" class="claim-list"></div>
+    </section>
+
+    <section id="roadmap" class="panel">
+      <div class="section-head">
+        <p class="eyebrow">Roadmap</p>
+        <h2>Dependency-aware next work</h2>
+      </div>
+      <div id="roadmap-list" class="roadmap-list"></div>
+    </section>
+  </main>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

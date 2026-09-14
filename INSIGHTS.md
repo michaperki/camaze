@@ -5,7 +5,7 @@
 An authenticated, read-only page compares exact model IDs in the customer's last
 30 complete UTC days of recorded usage. It does not fetch provider usage, change
 models, calculate personal savings, or write customer records. Existing cost sync
-continues to populate `daily_costs`. General comparisons require a higher measured
+continues to populate `daily_costs`. General comparisons require a higher published
 AA Intelligence Index score and input/output rates that are both no higher, with
 at least one strictly lower. Discounts, caching and completed-task costs are not
 estimated. Context, input/output modalities and tool support must not regress;
@@ -24,9 +24,9 @@ and the page's Intelligence Index version 4.3. No authentication or access-contr
 bypass was used. The live Node adapter was also executed successfully.
 
 All four reviewed records currently have `intelligenceIndexIsEstimated: true`.
-This implementation deliberately suppresses estimated or unknown-measurement
-scores. Therefore today's extracted snapshot produces no eligible recommendations
-for these pairs. Live fetching works; measured evidence coverage remains limited.
+Published scores remain eligible, including estimates. Each estimated score is
+labeled "Estimated by Artificial Analysis" in the comparison; unknown measurement
+status is labeled separately. Missing or nonnumeric scores remain ineligible.
 This is not evidence that a customer's model is optimal. AA evaluation observation
 dates were not available: `observedAt` stays null, distinct from `fetchedAt`.
 Public HTML is not a stable API contract; layout/schema changes fail closed.
@@ -60,7 +60,8 @@ Provider rate/capability sources are stored with each catalog entry:
 
 1. Review and apply `migrations/20260911_insight_sources.sql` to the chosen test
    Supabase project. It creates shared metadata only, with RLS and no browser role
-   permissions. No migration has been applied by this implementation task.
+   permissions. The user applied this migration to the configured Supabase project on 2026-09-14 UTC,
+   and the initial refresh successfully stored four benchmark records.
 2. Use the existing server-only `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and
    `CRON_SECRET`, and the existing browser Supabase configuration. Never expose
    service-role or cron credentials to the client.
