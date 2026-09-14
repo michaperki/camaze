@@ -294,6 +294,42 @@
     background: var(--page);
     color: var(--text-primary);
   }
+  /* Sim day/month advances (and month navigation) re-render these bars and
+     headline numbers rather than the page reloading — animate the change
+     instead of snapping, so it's a "watch it move" comparison rather than a
+     "remember what it said before" one. The static `width: var(--bar-target)`
+     is the real source of truth (and the whole story under reduced motion);
+     the animation just plays through it on the way to the same value. */
+  .model-bar, .budget-bar {
+    width: var(--bar-target, 0%);
+    animation: sim-bar-grow 0.5s cubic-bezier(.22, .9, .32, 1) both;
+  }
+  @keyframes sim-bar-grow {
+    from { width: 0%; }
+    to { width: var(--bar-target, 100%); }
+  }
+  /* Each day's stacked-bar shapes share one <g> (see the chart's render())
+     so the whole day can scale up from the baseline it already sits on —
+     fill-box/bottom origin needs no coordinate math per bar. */
+  .chart-bar-group {
+    transform-box: fill-box;
+    transform-origin: bottom;
+    animation: sim-chart-bar-grow 0.5s cubic-bezier(.22, .9, .32, 1) both;
+  }
+  @keyframes sim-chart-bar-grow {
+    from { transform: scaleY(0); }
+    to { transform: scaleY(1); }
+  }
+  .chart-bar-total {
+    animation: sim-fade-in 0.3s ease 0.32s both;
+  }
+  @keyframes sim-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .model-bar, .budget-bar, .chart-bar-group, .chart-bar-total { animation: none; }
+  }
 </style>
 </head>
 <body>
@@ -425,6 +461,37 @@ function niceTicks(max) {
 
 const esc = (s) => String(s).replace(/</g, "&lt;");
 
+const REDUCED_MOTION = typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Ticks a stat's displayed number from its previous value to `to` instead
+// of snapping straight to it — lets a sim day/month advance (or a plain
+// month-nav click) actually be watched moving rather than compared against
+// what the page said a moment ago. `from` omitted (first paint, or the
+// stat wasn't shown before) means no animation, just the final value.
+function animateNumber(el, to, fmt, from) {
+  if (!el) return;
+  if (REDUCED_MOTION || from == null || from === to || !Number.isFinite(from) || !Number.isFinite(to)) {
+    el.textContent = fmt(to);
+    return;
+  }
+  cancelAnimationFrame(el._simRaf);
+  const start = performance.now();
+  const DURATION = 550;
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / DURATION);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = fmt(from + (to - from) * eased);
+    if (t < 1) el._simRaf = requestAnimationFrame(step);
+  };
+  el._simRaf = requestAnimationFrame(step);
+}
+
+// Previous-render values for the headline numbers above — read by
+// animateNumber() as the "from" on the next render, written right after.
+let prevChartTotal = null;
+let prevSummary = { mtd: null, forecast: null, budget: null };
+
 function fmtAgo(iso) {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins <= 0) return "just now";
@@ -453,6 +520,7 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
     description.textContent = "";
     content.innerHTML = `<div class="notes">${notes}</div>` +
       '<div class="message">No provider data could be loaded.</div>';
+    prevChartTotal = null;
     return;
   }
 
@@ -465,8 +533,10 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
   // split out rather than folded silently into one number. Lives in the
   // card's panel-description now rather than inline above the chart.
   description.innerHTML = totals.subscriptions > 0
-    ? `<span class="chart-total-amount">${fmtUSD(totals.combined)}</span> total — ${fmtUSD(totals.usage)} usage, ${fmtUSD(totals.subscriptions)} subscriptions`
-    : `<span class="chart-total-amount">${fmtUSD(totals.combined)}</span> total`;
+    ? `<span class="chart-total-amount" id="chart-total-amount">${fmtUSD(totals.combined)}</span> total — ${fmtUSD(totals.usage)} usage, ${fmtUSD(totals.subscriptions)} subscriptions`
+    : `<span class="chart-total-amount" id="chart-total-amount">${fmtUSD(totals.combined)}</span> total`;
+  animateNumber(document.getElementById("chart-total-amount"), totals.combined, fmtUSD, prevChartTotal);
+  prevChartTotal = totals.combined;
 
   const legendHtml =
     '<div class="chart-legend">' +
@@ -528,8 +598,13 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
     const segs = active
       .map(p => ({ name: p.name, usd: d[p.name] }))
       .filter(seg => seg.usd > 0);
+    // Grouped so the whole day's shapes can grow up from the baseline as
+    // one unit (see .chart-bar-group's animation) — the bar-total label
+    // below stays outside the group so scaling the bar never squishes it.
+    s += '<g class="chart-bar-group">';
     if (segs.length === 0) {
       s += `<rect x="${x}" y="${baseline - 0.5}" width="${barW}" height="1" fill="var(--text-muted)" opacity="0.5"/>`;
+      s += '</g>';
       return;
     }
     let cum = 0;
@@ -550,6 +625,7 @@ function render({ providers, days, totals, errors, cached, cachedAt }) {
         s += `<rect x="${x}" y="${yTop}" width="${barW}" height="${h}" fill="${fill}"/>`;
       }
     });
+    s += '</g>';
     const total = dayTotal(d);
     if (total > 0 && (total === maxDayTotal || total >= barLabelThreshold)) {
       const cx = x + barW / 2;
@@ -671,7 +747,7 @@ function renderModels(models) {
       '<div class="model-row">' +
       `<span class="model-label" title="${esc(m.model)}">${esc(label)}</span>` +
       '<div class="model-bar-track">' +
-      (pct > 0 ? `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` : "") +
+      (pct > 0 ? `<div class="model-bar" style="--bar-target:${pct}%;background:${fill}"></div>` : "") +
       "</div>" +
       '<span class="model-stats">' +
       `<span class="model-pct">${shareLabel}%</span>` +
@@ -755,7 +831,7 @@ function renderAttribution(attribution) {
         '<div class="model-row">' +
         `<span class="model-label" title="${esc(a.name)}">${esc(a.name)}</span>` +
         '<div class="model-bar-track">' +
-        (pct > 0 ? `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` : "") +
+        (pct > 0 ? `<div class="model-bar" style="--bar-target:${pct}%;background:${fill}"></div>` : "") +
         "</div>" +
         '<span class="model-stats">' +
         `<span class="model-amount">${fmtUSD(a.amount_usd)}${estBadge}${unpricedBadge}</span>` +
@@ -826,7 +902,7 @@ function renderDepartmentBreakdown(attribution) {
       '<div class="model-row">' +
       `<span class="model-label" title="${esc(d.department.name)}">${esc(d.department.name)}</span>` +
       '<div class="model-bar-track">' +
-      (pct > 0 ? `<div class="model-bar" style="width:${pct}%;background:${fill}"></div>` : "") +
+      (pct > 0 ? `<div class="model-bar" style="--bar-target:${pct}%;background:${fill}"></div>` : "") +
       "</div>" +
       '<span class="model-stats">' +
       perEmployee +
@@ -871,7 +947,7 @@ function renderTopSpenders(attribution) {
       '<div class="model-row">' +
       `<span class="model-label" title="${esc(p.person.name)}">${esc(p.person.name)}</span>` +
       '<div class="model-bar-track">' +
-      (pct > 0 ? `<div class="model-bar" style="width:${pct}%;background:var(--accent)"></div>` : "") +
+      (pct > 0 ? `<div class="model-bar" style="--bar-target:${pct}%;background:var(--accent)"></div>` : "") +
       "</div>" +
       '<span class="model-stats">' +
       `<span class="model-amount">${fmtUSD(p.amount_usd)}</span>` +
@@ -1101,6 +1177,7 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth, from
   const row = document.getElementById("summary-row");
   if (!summary) {
     row.style.display = "none";
+    prevSummary = { mtd: null, forecast: null, budget: null };
     return;
   }
   row.style.display = "grid";
@@ -1108,7 +1185,8 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth, from
   const { mtd, forecast, days_elapsed, budget, usageMtd, subscriptionMtd, fixedCostsMtd } = summary;
 
   document.getElementById("mtd-label").textContent = isCurrentMonth ? "Month to Date" : "Total";
-  document.getElementById("mtd-value").textContent = fmtUSD(mtd);
+  animateNumber(document.getElementById("mtd-value"), mtd, fmtUSD, prevSummary.mtd);
+  prevSummary.mtd = mtd;
   document.getElementById("mtd-range").textContent = fmtMonthRange(selectedMonth, days_elapsed);
 
   // Data served from the Supabase sync cache (see api/costs.js's
@@ -1148,7 +1226,13 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth, from
   // projection. Budget status falls back to the known MTD/total instead.
   const status = budgetStatus(forecast ?? mtd, budget);
   const forecastEl = document.getElementById("forecast-value");
-  forecastEl.textContent = forecast == null ? "—" : fmtUSD(forecast);
+  if (forecast == null) {
+    forecastEl.textContent = "—";
+    prevSummary.forecast = null;
+  } else {
+    animateNumber(forecastEl, forecast, fmtUSD, prevSummary.forecast);
+    prevSummary.forecast = forecast;
+  }
   forecastEl.className = "stat-card-value" + (isCurrentMonth && status ? ` stat-${status}` : "");
   document.getElementById("forecast-meta").textContent = isCurrentMonth ? "est. month-end" : "month complete";
 
@@ -1161,15 +1245,18 @@ function renderSummary(summary, accessToken, selectedMonth, isCurrentMonth, from
       ? `<span class="budget-pct-over">${Math.round(pct)}% used</span>`
       : `${Math.round(pct)}% used`;
     budgetContent.innerHTML =
-      `<div class="stat-card-value">${fmtUSD(budget)}</div>` +
-      `<div class="budget-bar-track"><div class="${barClass}" style="width:${Math.min(pct, 100)}%"></div></div>` +
+      `<div class="stat-card-value" id="budget-stat-value">${fmtUSD(budget)}</div>` +
+      `<div class="budget-bar-track"><div class="${barClass}" style="--bar-target:${Math.min(pct, 100)}%"></div></div>` +
       `<div class="stat-card-meta">${pctLabel} &middot; <a href="#" id="edit-budget-link">Edit</a></div>`;
+    animateNumber(document.getElementById("budget-stat-value"), budget, fmtUSD, prevSummary.budget);
+    prevSummary.budget = budget;
     document.getElementById("edit-budget-link").addEventListener("click", (e) => {
       e.preventDefault();
       showBudgetForm(accessToken, budget);
     });
   } else {
     budgetContent.innerHTML = '<button class="btn btn-sm" id="set-budget-btn" type="button">Set budget</button>';
+    prevSummary.budget = null;
     document.getElementById("set-budget-btn").addEventListener("click", () => {
       showBudgetForm(accessToken, null);
     });
@@ -1327,6 +1414,18 @@ function prefetchMonth(accessToken, sel) {
     window.location.replace("/login.html");
     return;
   }
+
+  // Called by simulation.js after any sim control action (day/month/play/
+  // spike/refresh — reset instead forces a full reload, since it swaps the
+  // whole company out from under this page). Mirrors what a fresh page
+  // load already does: re-derive the current month from the (now
+  // possibly-advanced) simulated date, then re-fetch — the animated
+  // renders above take care of making the change visible.
+  window.camazeSimRefresh = () => {
+    selectedMonth = currentMonthUTC();
+    updateMonthUI();
+    loadDashboard(session.access_token, true);
+  };
 
   await window.initializeSimulation(session);
   selectedMonth = currentMonthUTC();

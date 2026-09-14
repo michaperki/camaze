@@ -74,6 +74,18 @@ function renderInsights(data) {
     document.getElementById("coverage").innerHTML = `<details><summary>${coverage.length} model${coverage.length === 1 ? "" : "s"} not evaluated</summary>${groupsHtml}</details>`;
   }
 }
+async function loadInsights(session) {
+  const status = document.getElementById("status");
+  status.textContent = "Loading recorded usage...";
+  try {
+    const response = await window.camazeFetch("/api/insights", { headers: { Authorization: `Bearer ${session.access_token || ""}` }, signal: AbortSignal.timeout(30000) });
+    if (response.status === 401) { location.replace("/login.html"); return; }
+    if (!response.ok) throw new Error("Insights could not be loaded. Refresh to retry.");
+    const data = await response.json();
+    renderInsights(data);
+  } catch (error) { status.textContent = error.message; }
+}
+
 (async () => {
   const status = document.getElementById("status");
   try {
@@ -85,13 +97,10 @@ function renderInsights(data) {
     document.getElementById("user-email").textContent = session.user.email || "";
     document.getElementById("header-right").style.visibility = "visible";
     document.getElementById("signout-btn").onclick = async () => { await client.auth.signOut(); location.replace("/login.html"); };
-    status.textContent = "Loading recorded usage...";
-    try {
-      const response = await window.camazeFetch("/api/insights", { headers: { Authorization: `Bearer ${session.access_token || ""}` }, signal: AbortSignal.timeout(30000) });
-      if (response.status === 401) { location.replace("/login.html"); return; }
-      if (!response.ok) throw new Error("Insights could not be loaded. Refresh to retry.");
-      const data = await response.json();
-      renderInsights(data);
-    } catch (error) { status.textContent = error.message; }
+    // Recorded usage is date-scoped, so a sim day/month advance changes
+    // what this page should show — re-fetch in place instead of the page
+    // reloading (see simulation.js's window.camazeSimRefresh).
+    window.camazeSimRefresh = () => loadInsights(session);
+    await loadInsights(session);
   } catch { status.textContent = "Sign-in could not be loaded. Refresh to try again."; }
 })();

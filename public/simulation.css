@@ -1,1 +1,113 @@
-#simulation-panel{background:#fff4d6;color:#422c00;border-bottom:2px solid #d39116;font:13px/1.5 system-ui,sans-serif;position:relative;z-index:20}#simulation-panel .sim-strip{display:flex;align-items:center;gap:20px;padding:10px 24px;flex-wrap:wrap}#simulation-panel .sim-strip strong{font-size:12px;letter-spacing:.08em}#simulation-panel a{color:#684400;margin-left:auto}#simulation-panel>details>summary{padding:8px 24px;cursor:pointer;border-top:1px solid #e3c78a}#simulation-panel .sim-panel-body{padding:0 24px 16px;max-width:1200px}#simulation-panel p{margin:8px 0}#simulation-panel .sim-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}#simulation-panel button{background:#fffaf0;color:#422c00;border:1px solid #b4862c;border-radius:6px;padding:8px 12px;font:inherit;cursor:pointer}#simulation-panel button:hover{background:#ffe5a0}#simulation-panel button:disabled{opacity:.5;cursor:wait}#simulation-panel .sim-hint{font-size:12px;max-width:900px}#simulation-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#fffaf0;padding:12px;max-height:300px;overflow:auto}#sim-status{font-weight:600}#simulation-panel details details{margin-top:12px}#simulation-panel summary{cursor:pointer}@media(max-width:600px){#simulation-panel .sim-strip{gap:6px;padding:10px 14px}#simulation-panel .sim-strip strong{width:100%}#simulation-panel .sim-panel-body{padding:0 14px 14px}#simulation-panel .sim-actions button{flex:1 1 135px}}
+/* Sim mode's corner trigger + slide-up drawer. Replaces the old
+   always-visible top banner (bright, pushed page content down, and
+   reloaded on every action) with a small fixed control that stays out
+   of the way until opened, on every /sim/* app page. */
+#sim-trigger {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font: 12px/1.2 var(--font-sans, system-ui, sans-serif);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+}
+#sim-trigger:hover { color: var(--text-primary); border-color: var(--text-muted); }
+#sim-trigger .sim-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex: none;
+}
+/* Playing state pulses so autoplay is visible without opening the
+   drawer; error state takes precedence and holds steady (a pulsing red
+   dot reads as more alarming than informative). */
+#sim-trigger.is-playing .sim-dot {
+  background: var(--accent);
+  animation: sim-pulse 1.6s ease-in-out infinite;
+}
+#sim-trigger.is-error .sim-dot { background: var(--danger); animation: none; }
+@keyframes sim-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+
+#sim-drawer {
+  position: fixed;
+  right: 20px;
+  bottom: 68px;
+  z-index: 41;
+  width: min(380px, calc(100vw - 40px));
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+  font: 13px/1.5 var(--font-sans, system-ui, sans-serif);
+  color: var(--text-primary);
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+  pointer-events: none;
+  transform-origin: bottom right;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+#sim-drawer.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) {
+  #sim-drawer { transition: none; }
+}
+
+#sim-drawer .sim-drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+#sim-drawer .sim-drawer-header strong { font-size: 13px; flex: 1; }
+#sim-drawer .sim-exit-link { font-size: 12px; color: var(--text-muted); text-decoration: underline; }
+#sim-drawer .sim-exit-link:hover { color: var(--text-primary); }
+#sim-drawer .sim-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+#sim-drawer .sim-close-btn:hover { color: var(--text-primary); }
+
+#sim-drawer .sim-drawer-body { padding: 12px 14px 16px; }
+#sim-drawer p { margin: 0 0 8px; font-size: 12px; color: var(--text-secondary); }
+#sim-drawer .sim-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+#sim-status { font-weight: 600; color: var(--text-primary); font-size: 12px; }
+#sim-drawer .sim-hint { font-size: 11px; color: var(--text-muted); }
+#sim-drawer details { margin-top: 10px; }
+#sim-drawer summary { cursor: pointer; font-size: 12px; color: var(--text-secondary); }
+#sim-drawer pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--code-bg);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  max-height: 240px;
+  overflow: auto;
+  font-size: 12px;
+  margin-top: 6px;
+}
+#sim-drawer details details { margin-top: 8px; }
+
+@media (max-width: 600px) {
+  #sim-trigger { right: 14px; bottom: 14px; }
+  #sim-drawer { right: 14px; bottom: 62px; }
+}
