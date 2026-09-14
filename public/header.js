@@ -87,4 +87,5 @@ import './aesthetic.js';
   }
 
   renderAppHeader();
+  window.camazeAestheticSetup?.();
 })();
