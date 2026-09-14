@@ -1,3 +1,4 @@
+const { providerFetch } = require("../lib/context");
 // OpenAI organization Costs API -> normalized [{ date, provider, amount_usd }]
 const crypto = require("node:crypto");
 const timing = require("../lib/timing");
@@ -30,7 +31,7 @@ async function fetchCostTotals(start, end, key) {
     params.append("group_by", "line_item");
     if (page) params.set("page", page);
 
-    const res = await timing.mark("openai:costs_request", () => fetch(`${API_URL}?${params}`, {
+    const res = await timing.mark("openai:costs_request", () => providerFetch(`${API_URL}?${params}`, {
       headers: { Authorization: `Bearer ${key}` },
     }));
     const body = await res.json().catch(() => null);
@@ -92,7 +93,7 @@ async function fetchUsageTokensByDay(start, end, key) {
     params.append("group_by", "model");
     if (page) params.set("page", page);
 
-    const res = await timing.mark("openai:usage_completions_request", () => fetch(`${ORG_BASE}/usage/completions?${params}`, {
+    const res = await timing.mark("openai:usage_completions_request", () => providerFetch(`${ORG_BASE}/usage/completions?${params}`, {
       headers: { Authorization: `Bearer ${key}` },
     }));
     const body = await res.json().catch(() => null);
@@ -177,7 +178,7 @@ async function validateKey(key) {
     bucket_width: "1d",
     limit: "1",
   });
-  const res = await fetch(`${API_URL}?${params}`, {
+  const res = await providerFetch(`${API_URL}?${params}`, {
     headers: { Authorization: `Bearer ${key}` },
   });
   if (res.ok) return;
@@ -200,7 +201,7 @@ async function listProjects(key) {
   do {
     const params = new URLSearchParams({ limit: "100" });
     if (after) params.set("after", after);
-    const res = await timing.mark("openai:projects_request", () => fetch(`${ORG_BASE}/projects?${params}`, {
+    const res = await timing.mark("openai:projects_request", () => providerFetch(`${ORG_BASE}/projects?${params}`, {
       headers: { Authorization: `Bearer ${key}` },
     }));
     const body = await res.json().catch(() => null);
@@ -255,7 +256,7 @@ async function fetchAttribution(start, end, keyOverride) {
     params.append("group_by", "project_id");
     if (page) params.set("page", page);
 
-    const res = await timing.mark("openai:attribution_costs_request", () => fetch(`${API_URL}?${params}`, {
+    const res = await timing.mark("openai:attribution_costs_request", () => providerFetch(`${API_URL}?${params}`, {
       headers: { Authorization: `Bearer ${key}` },
     }));
     const body = await res.json().catch(() => null);

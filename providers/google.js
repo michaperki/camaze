@@ -1,3 +1,4 @@
+const { providerFetch } = require("../lib/context");
 // Google Cloud billing export (BigQuery) -> normalized [{ date, provider, amount_usd }]
 //
 // There is no cost API: billing data lands in a BigQuery table
@@ -43,6 +44,7 @@ function loadServiceAccountKey(inlineJson) {
 // `inlineJson`: per-user service account JSON string, or undefined to use
 // the env-configured credentials.
 async function getAccessToken(inlineJson) {
+  if (require("../lib/context").current()) return "camaze-simulation-google";
   const key = loadServiceAccountKey(inlineJson);
   if (!key.client_email || !key.private_key) {
     throw new Error("Service account key is missing client_email/private_key");
@@ -68,7 +70,7 @@ async function getAccessToken(inlineJson) {
     .sign("RSA-SHA256", Buffer.from(unsigned), key.private_key)
     .toString("base64url");
 
-  const res = await timing.mark("google:auth_token_request", () => fetch(TOKEN_URL, {
+  const res = await timing.mark("google:auth_token_request", () => providerFetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -86,7 +88,7 @@ async function getAccessToken(inlineJson) {
 }
 
 async function bq(pathOrUrl, accessToken, options = {}) {
-  const res = await fetch(`${BQ_BASE}${pathOrUrl}`, {
+  const res = await providerFetch(`${BQ_BASE}${pathOrUrl}`, {
     ...options,
     headers: {
       Authorization: `Bearer ${accessToken}`,

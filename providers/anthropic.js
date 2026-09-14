@@ -1,3 +1,5 @@
+const { providerFetch } = require("../lib/context");
+const businessClock = require("../lib/context");
 // Anthropic Admin API cost report -> normalized [{ date, provider, amount_usd }]
 const crypto = require("node:crypto");
 const { resolvePrice, warnUnknownModel, ensurePricesLoaded } = require("../lib/pricing");
@@ -44,7 +46,7 @@ async function fetchCostReportTotals(start, end, key) {
     params.append("group_by[]", "description");
     if (page) params.set("page", page);
 
-    const res = await timing.mark("anthropic:cost_report_request", () => fetch(`${API_URL}?${params}`, {
+    const res = await timing.mark("anthropic:cost_report_request", () => providerFetch(`${API_URL}?${params}`, {
       headers: {
         "x-api-key": key,
         "anthropic-version": "2023-06-01",
@@ -102,7 +104,7 @@ async function fetchUsageTotalsByDay(start, end, key) {
     params.append("group_by[]", "context_window");
     if (page) params.set("page", page);
 
-    const res = await timing.mark("anthropic:usage_report_totals_request", () => fetch(`${ORG_BASE}/usage_report/messages?${params}`, {
+    const res = await timing.mark("anthropic:usage_report_totals_request", () => providerFetch(`${ORG_BASE}/usage_report/messages?${params}`, {
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
     }));
     const body = await res.json().catch(() => null);
@@ -194,14 +196,14 @@ const ORG_REQUIRED_MESSAGE =
 async function validateKey(key) {
   // starting_at must be day-aligned (bucket_width=1d), or the API rejects
   // the implied [starting_at, now] range as inverted.
-  const now = new Date();
+  const now = businessClock.now();
   const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
   const params = new URLSearchParams({
     starting_at: yesterday.toISOString(),
     bucket_width: "1d",
     limit: "1",
   });
-  const res = await fetch(`${API_URL}?${params}`, {
+  const res = await providerFetch(`${API_URL}?${params}`, {
     headers: {
       "x-api-key": key,
       "anthropic-version": "2023-06-01",
@@ -232,7 +234,7 @@ async function listNames(path, key) {
   do {
     const params = new URLSearchParams({ limit: "1000" });
     if (afterId) params.set("after_id", afterId);
-    const res = await timing.mark(`anthropic:${path}_names_request`, () => fetch(`${ORG_BASE}/${path}?${params}`, {
+    const res = await timing.mark(`anthropic:${path}_names_request`, () => providerFetch(`${ORG_BASE}/${path}?${params}`, {
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
     }));
     const body = await res.json().catch(() => null);
@@ -273,7 +275,7 @@ async function fetchWorkspaceCosts(start, end, key) {
     params.append("group_by[]", "workspace_id");
     if (page) params.set("page", page);
 
-    const res = await timing.mark("anthropic:workspace_cost_request", () => fetch(`${API_URL}?${params}`, {
+    const res = await timing.mark("anthropic:workspace_cost_request", () => providerFetch(`${API_URL}?${params}`, {
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
     }));
     const body = await res.json().catch(() => null);
@@ -456,7 +458,7 @@ function estimateDayFromUsage(usageRows) {
 async function fetchCostReportLinesByDay(start, end, key) {
   const byDay = new Map(); // date -> [{ amountUsd, model, token_type, service_tier, context_window }]
 
-  const now = new Date();
+  const now = businessClock.now();
   const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   if (start >= startOfToday) return byDay;
 
@@ -471,7 +473,7 @@ async function fetchCostReportLinesByDay(start, end, key) {
     params.append("group_by[]", "description");
     if (page) params.set("page", page);
 
-    const res = await timing.mark("anthropic:cost_report_lines_request", () => fetch(`${API_URL}?${params}`, {
+    const res = await timing.mark("anthropic:cost_report_lines_request", () => providerFetch(`${API_URL}?${params}`, {
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
     }));
     const body = await res.json().catch(() => null);
@@ -525,7 +527,7 @@ async function fetchUsageByDay(start, end, key) {
     params.append("group_by[]", "context_window");
     if (page) params.set("page", page);
 
-    const res = await timing.mark("anthropic:usage_report_request", () => fetch(`${ORG_BASE}/usage_report/messages?${params}`, {
+    const res = await timing.mark("anthropic:usage_report_request", () => providerFetch(`${ORG_BASE}/usage_report/messages?${params}`, {
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
     }));
     const body = await res.json().catch(() => null);
