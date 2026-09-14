@@ -2,16 +2,10 @@ begin;
 alter table public.simulation_environments drop constraint if exists simulation_environments_owner_id_check;
 update public.simulation_environments set owner_id = '0fdc87e0-60fc-4e48-af96-d363d92ad7a8' where owner_id = 'ca0a2e00-0000-4000-8000-000000000001';
 alter table public.simulation_environments add constraint simulation_environments_owner_id_check check (owner_id = '0fdc87e0-60fc-4e48-af96-d363d92ad7a8');
--- Existing restrictive policies contain the previous reserved UUID.
-do $$ declare r record; begin
-  for r in select schemaname, tablename, policyname from pg_policies where policyname = 'exclude_system_simulation' loop
-    execute format('drop policy if exists %I on %I.%I', r.policyname, r.schemaname, r.tablename);
-  end loop;
-end $$;
+-- Existing restrictive policies contain the previous reserved UUID; update them in place.
 do $$ declare t text; begin
   foreach t in array array['daily_costs','monthly_attribution','cost_sync_state','departments','people','entity_assignments','user_settings','user_fixed_costs','user_notification_settings','alert_state','reconciliation_runs','user_provider_keys','simulation_messages'] loop
-    execute format('drop policy if exists exclude_system_simulation on public.%I',t);
-    execute format('create policy exclude_system_simulation on public.%I as restrictive for all to anon, authenticated using (user_id <> %L::uuid) with check (user_id <> %L::uuid)',t,'0fdc87e0-60fc-4e48-af96-d363d92ad7a8','0fdc87e0-60fc-4e48-af96-d363d92ad7a8');
+    execute format('alter policy exclude_system_simulation on public.%I using (user_id <> %L::uuid) with check (user_id <> %L::uuid)',t,'0fdc87e0-60fc-4e48-af96-d363d92ad7a8','0fdc87e0-60fc-4e48-af96-d363d92ad7a8');
   end loop;
 end $$;
 create or replace function public.guard_simulation_write() returns trigger
