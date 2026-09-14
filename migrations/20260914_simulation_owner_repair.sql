@@ -1,40 +1,19 @@
--- Single reserved data owner, using existing user_id-scoped product tables.
--- Apply before deploying the simulator; then run scripts/provision-simulation.js.
 begin;
-create table public.simulation_admins (
-  user_id uuid primary key references auth.users(id) on delete cascade
-);
-create table public.simulation_environments (
-  owner_id uuid primary key check (owner_id = '0fdc87e0-60fc-4e48-af96-d363d92ad7a8'),
-  scenario_version text not null default 'mid-size-v1',
-  seed integer not null default 42,
-  business_now timestamptz not null default '2026-09-14T12:00:00Z',
-  revision bigint not null default 0,
-  status text not null default 'empty' check (status in ('empty','ready','working','error')),
-  playing boolean not null default false,
-  events jsonb not null default '[]',
-  operation uuid,
-  operation_started_at timestamptz,
-  error text
-);
-insert into public.simulation_environments(owner_id) values ('0fdc87e0-60fc-4e48-af96-d363d92ad7a8');
-create table public.simulation_messages (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.simulation_environments(owner_id),
-  business_date timestamptz not null,
-  subject text not null,
-  body text not null,
-  created_at timestamptz not null default now()
-);
-alter table public.simulation_admins enable row level security;
-alter table public.simulation_environments enable row level security;
-alter table public.simulation_messages enable row level security;
-revoke all on public.simulation_admins, public.simulation_environments, public.simulation_messages from anon, authenticated;
-grant all on public.simulation_admins, public.simulation_environments, public.simulation_messages to service_role;
-
--- Fence every simulation write, including writes by a stale Vercel invocation.
--- SELECT FOR UPDATE serializes this check against reset/advance.
-create function public.guard_simulation_write() returns trigger
+alter table public.simulation_environments drop constraint if exists simulation_environments_owner_id_check;
+alter table public.simulation_environments add constraint simulation_environments_owner_id_check check (owner_id = '0fdc87e0-60fc-4e48-af96-d363d92ad7a8');
+update public.simulation_environments set owner_id = '0fdc87e0-60fc-4e48-af96-d363d92ad7a8' where owner_id = 'ca0a2e00-0000-4000-8000-000000000001';
+-- Existing restrictive policies contain the previous reserved UUID.
+do $$ declare r record; begin
+  for r in select schemaname, tablename, policyname from pg_policies where policyname = 'exclude_system_simulation' loop
+    execute format('drop policy if exists %I on %I.%I', r.policyname, r.schemaname, r.tablename);
+  end loop;
+end $$;
+do $$ declare t text; begin
+  foreach t in array array['daily_costs','monthly_attribution','cost_sync_state','departments','people','entity_assignments','user_settings','user_fixed_costs','user_notification_settings','alert_state','reconciliation_runs','user_provider_keys','simulation_messages'] loop
+    execute format('create policy exclude_system_simulation on public.%I as restrictive for all to anon, authenticated using (user_id <> %L::uuid) with check (user_id <> %L::uuid)',t,'0fdc87e0-60fc-4e48-af96-d363d92ad7a8','0fdc87e0-60fc-4e48-af96-d363d92ad7a8');
+  end loop;
+end $$;
+create or replace function public.guard_simulation_write() returns trigger
 language plpgsql set search_path = public, pg_temp as $$
 declare
   target uuid;
@@ -62,7 +41,7 @@ begin
 end $$;
 
 -- Ordinary foreign keys on IDs alone do not enforce same-account ownership.
-create function public.guard_org_ownership() returns trigger
+create or replace function public.guard_org_ownership() returns trigger
 language plpgsql set search_path = public, pg_temp as $$
 begin
   if NEW.department_id is not null and not exists (select 1 from public.departments where id=NEW.department_id and user_id=NEW.user_id) then
@@ -85,7 +64,7 @@ do $$ declare t text; begin
   end loop;
 end $$;
 
-create function public.simulation_begin(expected_revision bigint, reset_scenario boolean default false)
+create or replace function public.simulation_begin(expected_revision bigint, reset_scenario boolean default false)
 returns public.simulation_environments language plpgsql security definer set search_path = public, pg_temp as $$
 declare e public.simulation_environments; t text;
 begin
@@ -104,7 +83,7 @@ begin
   end if;
   return e;
 end $$;
-create function public.simulation_finish(expected_revision bigint, operation_id uuid, new_now timestamptz, new_events jsonb, new_playing boolean, failure text default null)
+create or replace function public.simulation_finish(expected_revision bigint, operation_id uuid, new_now timestamptz, new_events jsonb, new_playing boolean, failure text default null)
 returns public.simulation_environments language plpgsql security definer set search_path = public, pg_temp as $$
 declare e public.simulation_environments;
 begin
@@ -114,6 +93,4 @@ begin
   if not found then raise exception 'Stale simulation operation'; end if;
   return e;
 end $$;
-revoke all on function public.simulation_begin(bigint,boolean), public.simulation_finish(bigint,uuid,timestamptz,jsonb,boolean,text) from public, anon, authenticated;
-grant execute on function public.simulation_begin(bigint,boolean), public.simulation_finish(bigint,uuid,timestamptz,jsonb,boolean,text) to service_role;
 commit;
