@@ -10,6 +10,7 @@ do $$ declare r record; begin
 end $$;
 do $$ declare t text; begin
   foreach t in array array['daily_costs','monthly_attribution','cost_sync_state','departments','people','entity_assignments','user_settings','user_fixed_costs','user_notification_settings','alert_state','reconciliation_runs','user_provider_keys','simulation_messages'] loop
+    execute format('drop policy if exists exclude_system_simulation on public.%I',t);
     execute format('create policy exclude_system_simulation on public.%I as restrictive for all to anon, authenticated using (user_id <> %L::uuid) with check (user_id <> %L::uuid)',t,'0fdc87e0-60fc-4e48-af96-d363d92ad7a8','0fdc87e0-60fc-4e48-af96-d363d92ad7a8');
   end loop;
 end $$;
