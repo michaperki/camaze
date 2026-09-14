@@ -92,8 +92,16 @@
 #sim-drawer .sim-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
 #sim-status { font-weight: 600; color: var(--text-primary); font-size: 12px; }
 #sim-drawer .sim-hint { font-size: 11px; color: var(--text-muted); }
-#sim-drawer details { margin-top: 10px; }
-#sim-drawer summary { cursor: pointer; font-size: 12px; color: var(--text-secondary); }
+#sim-drawer details {
+  margin-top: 10px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color-scheme: inherit;
+}
+#sim-drawer summary { cursor: pointer; font-size: 12px; color: var(--text-secondary); background: var(--surface-1); }
 #sim-drawer pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

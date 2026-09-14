@@ -30,6 +30,7 @@ test('built chart supports filtering, theme, month navigation and an exact usage
   await expect(page.locator('#chart-description')).toContainText('$20.00');
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('.chart-data')).toHaveCSS('background-color', 'rgb(14, 16, 18)');
   await page.locator('#month-prev').click();
   await expect(page.locator('.spend-chart svg')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -44,6 +45,11 @@ test('simulation refresh updates the existing chart and preserves filters', asyn
   await page.route('**/api/sim/costs?*', route => route.fulfill({ json: costs('2026-09', amount) }));
   await page.goto('/sim/dashboard.html');
   await expect(page.locator('.spend-chart svg')).toBeVisible();
+  await page.locator('#sim-trigger').click();
+  await expect(page.locator('#sim-drawer')).toHaveClass(/open/);
+  await page.getByText('Captured alerts and digests', { exact: false }).click();
+  await page.getByRole('button', { name: 'Switch to dark theme' }).click();
+  await expect(page.locator('#sim-drawer details')).toHaveCSS('background-color', 'rgb(14, 16, 18)');
   await page.getByRole('button', { name: 'OpenAI', exact: true }).click();
   amount = 20;
   await page.evaluate(() => window.camazeSimRefresh());

@@ -2,8 +2,21 @@
 .provider-filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 0; }
 .provider-filters [aria-pressed="false"] { opacity: .55; text-decoration: line-through; }
 .provider-filters [aria-pressed="true"] { border-color: var(--accent); }
-.chart-data { font-size: 12px; color: var(--text-secondary); margin-top: 10px; }
-.chart-data summary { cursor: pointer; }
+.chart-data {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-top: 10px;
+  padding: 10px 12px;
+  color-scheme: inherit;
+}
+.chart-data summary { cursor: pointer; color: var(--text-secondary); }
 .chart-data-scroll { overflow-x: auto; max-height: 320px; margin-top: 12px; }
+.chart-data .data-table { color: var(--text-primary); background: var(--surface-1); }
+.chart-data .data-table tbody tr,
+.chart-data .data-table tbody td { background: var(--surface-1); color: var(--text-primary); }
+.chart-data .data-table tbody tr:hover td { background: var(--code-bg); }
 .chart-data caption { text-align: left; padding: 8px 0; }
 @media (max-width: 680px) { .spend-chart { height: 280px; } }
