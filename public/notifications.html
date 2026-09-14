@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <script src="/theme-init.js"></script>
+<script src="/simulation.js"></script>
+<link rel="stylesheet" href="/simulation.css">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>camaze — notifications</title>
 <link rel="stylesheet" href="/shared.css">
@@ -196,7 +198,7 @@ function alertsSectionHtml(settings) {
 }
 
 async function main() {
-  const cfgRes = await fetch("/api/config");
+  const cfgRes = await window.camazeFetch("/api/config");
   const cfg = await cfgRes.json();
   if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
     document.getElementById("content").innerHTML =
@@ -211,6 +213,7 @@ async function main() {
     return;
   }
 
+  await window.initializeSimulation(session);
   document.getElementById("user-email").textContent = session.user.email ?? "";
   document.getElementById("header-right").style.visibility = "visible";
   document.getElementById("signout-btn").addEventListener("click", async () => {
@@ -221,7 +224,7 @@ async function main() {
   const authHeaders = { Authorization: `Bearer ${session.access_token}` };
   const content = document.getElementById("content");
 
-  const res = await fetch("/api/notifications", { headers: authHeaders });
+  const res = await window.camazeFetch("/api/notifications", { headers: authHeaders });
   const settings = await res.json();
   if (settings.error) throw new Error(settings.error);
 
@@ -242,7 +245,7 @@ async function main() {
       digestHour: Number(document.getElementById("hour-select").value),
     };
 
-    fetch("/api/notifications", {
+    window.camazeFetch("/api/notifications", {
       method: "POST",
       headers: { ...authHeaders, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -271,7 +274,7 @@ async function main() {
     testBtn.disabled = true;
     testBtn.textContent = "Sending…";
 
-    fetch("/api/digest", { method: "POST", headers: authHeaders })
+    window.camazeFetch("/api/digest", { method: "POST", headers: authHeaders })
       .then(async (r) => {
         const data = await r.json();
         if (data.error) throw new Error(data.error);
@@ -296,7 +299,7 @@ async function main() {
     spikeSaveStatus.textContent = "";
     spikeCheckbox.disabled = true;
 
-    fetch("/api/notifications", {
+    window.camazeFetch("/api/notifications", {
       method: "POST",
       headers: { ...authHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({ spikeAlertsEnabled: enabled }),
@@ -338,7 +341,7 @@ async function main() {
       budgetAlertsCheckbox.disabled = true;
       thresholdInput.disabled = true;
 
-      fetch("/api/notifications", {
+      window.camazeFetch("/api/notifications", {
         method: "POST",
         headers: { ...authHeaders, "Content-Type": "application/json" },
         body: JSON.stringify({ budgetAlertsEnabled: enabled, alertThreshold: threshold }),
@@ -380,7 +383,7 @@ async function main() {
     alertTestBtn.disabled = true;
     alertTestBtn.textContent = "Sending…";
 
-    fetch("/api/alerts/test", { method: "POST", headers: authHeaders })
+    window.camazeFetch("/api/alerts/test", { method: "POST", headers: authHeaders })
       .then(async (r) => {
         const data = await r.json();
         if (data.error) throw new Error(data.error);

@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <script src="/theme-init.js"></script>
+<script src="/simulation.js"></script>
+<link rel="stylesheet" href="/simulation.css">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>camaze — integrations</title>
 <link rel="stylesheet" href="/shared.css">
@@ -283,7 +285,7 @@ function render(providerStates) {
 }
 
 async function main() {
-  const cfgRes = await fetch("/api/config");
+  const cfgRes = await window.camazeFetch("/api/config");
   const cfg = await cfgRes.json();
   if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
     document.getElementById("content").innerHTML =
@@ -298,6 +300,7 @@ async function main() {
     return;
   }
 
+  await window.initializeSimulation(session);
   document.getElementById("user-email").textContent = session.user.email ?? "";
   document.getElementById("header-right").style.visibility = "visible";
   document.getElementById("signout-btn").addEventListener("click", async () => {
@@ -308,7 +311,7 @@ async function main() {
   const authHeaders = { Authorization: `Bearer ${session.access_token}` };
 
   async function loadKeys() {
-    const res = await fetch("/api/keys", { headers: authHeaders });
+    const res = await window.camazeFetch("/api/keys", { headers: authHeaders });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     render(data.providers || {});
@@ -330,7 +333,7 @@ async function main() {
       const provider = disconnectBtn.dataset.provider;
       if (!confirm(`Disconnect ${provider}? camaze will stop tracking its spend until you reconnect.`)) return;
       disconnectBtn.disabled = true;
-      fetch(`/api/keys?provider=${encodeURIComponent(provider)}`, { method: "DELETE", headers: authHeaders })
+      window.camazeFetch(`/api/keys?provider=${encodeURIComponent(provider)}`, { method: "DELETE", headers: authHeaders })
         .then(async (res) => {
           const data = await res.json();
           if (data.error) throw new Error(data.error);
@@ -367,7 +370,7 @@ async function main() {
     submitBtn.disabled = true;
     submitBtn.textContent = "Connecting…";
 
-    fetch("/api/keys", {
+    window.camazeFetch("/api/keys", {
       method: "POST",
       headers: { ...authHeaders, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -435,7 +438,7 @@ async function main() {
   }
 
   async function loadFixedCosts() {
-    const res = await fetch("/api/fixed-costs", { headers: authHeaders });
+    const res = await window.camazeFetch("/api/fixed-costs", { headers: authHeaders });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     renderFixedCosts(data.fixedCosts || []);
@@ -495,7 +498,7 @@ async function main() {
     if (deleteBtn) {
       if (!confirm("Remove this subscription?")) return;
       deleteBtn.disabled = true;
-      fetch(`/api/fixed-costs?id=${encodeURIComponent(deleteBtn.dataset.id)}`, { method: "DELETE", headers: authHeaders })
+      window.camazeFetch(`/api/fixed-costs?id=${encodeURIComponent(deleteBtn.dataset.id)}`, { method: "DELETE", headers: authHeaders })
         .then(async (res) => {
           const data = await res.json();
           if (data.error) throw new Error(data.error);
@@ -530,8 +533,8 @@ async function main() {
     submitBtn.disabled = true;
 
     const req = id
-      ? fetch("/api/fixed-costs", { method: "PATCH", headers: { ...authHeaders, "Content-Type": "application/json" }, body: JSON.stringify({ id, ...body }) })
-      : fetch("/api/fixed-costs", { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      ? window.camazeFetch("/api/fixed-costs", { method: "PATCH", headers: { ...authHeaders, "Content-Type": "application/json" }, body: JSON.stringify({ id, ...body }) })
+      : window.camazeFetch("/api/fixed-costs", { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
     req
       .then(async (res) => {

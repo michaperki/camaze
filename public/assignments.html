@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <script src="/theme-init.js"></script>
+<script src="/simulation.js"></script>
+<link rel="stylesheet" href="/simulation.css">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>camaze — assignments</title>
 <link rel="stylesheet" href="/shared.css">
@@ -232,7 +234,7 @@ async function saveAssignment(row) {
 
   showRowStatus(row, "Saving…");
   try {
-    const res = await fetch("/api/org?resource=assignments", {
+    const res = await window.camazeFetch("/api/org?resource=assignments", {
       method: "POST",
       headers: { ...authHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({ provider, scope, entity_id: entityId, department_id: departmentId, person_id: personId }),
@@ -270,7 +272,7 @@ async function saveDepartment(row) {
 
   showRowStatus(row, "Saving…");
   try {
-    const res = await fetch("/api/org?resource=departments", {
+    const res = await window.camazeFetch("/api/org?resource=departments", {
       method: "PATCH",
       headers: { ...authHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -301,7 +303,7 @@ async function savePerson(row) {
 
   showRowStatus(row, "Saving…");
   try {
-    const res = await fetch("/api/org?resource=people", {
+    const res = await window.camazeFetch("/api/org?resource=people", {
       method: "PATCH",
       headers: { ...authHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({ id, name, email: email || null, department_id: departmentId }),
@@ -320,7 +322,7 @@ async function savePerson(row) {
 }
 
 async function reloadEntities() {
-  const res = await fetch(`/api/org?resource=entities&month=${encodeURIComponent(state.month)}`, { headers: authHeaders });
+  const res = await window.camazeFetch(`/api/org?resource=entities&month=${encodeURIComponent(state.month)}`, { headers: authHeaders });
   const data = await res.json();
   if (data.error) throw new Error(data.error);
   state.entities = data.entities;
@@ -346,7 +348,7 @@ function wireDepartments() {
     if (!btn) return;
     if (!confirm("Remove this department? People and assignments pointed at it will fall back to Unassigned.")) return;
     btn.disabled = true;
-    fetch(`/api/org?resource=departments&id=${encodeURIComponent(btn.dataset.id)}`, { method: "DELETE", headers: authHeaders })
+    window.camazeFetch(`/api/org?resource=departments&id=${encodeURIComponent(btn.dataset.id)}`, { method: "DELETE", headers: authHeaders })
       .then(async (res) => {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
@@ -387,7 +389,7 @@ function wireDepartments() {
     };
     const submitBtn = form.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
-    fetch("/api/org?resource=departments", {
+    window.camazeFetch("/api/org?resource=departments", {
       method: "POST",
       headers: { ...authHeaders, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -418,7 +420,7 @@ function wirePeople() {
     if (!btn) return;
     if (!confirm("Remove this person? Assignments pointed at them will fall back to Unassigned.")) return;
     btn.disabled = true;
-    fetch(`/api/org?resource=people&id=${encodeURIComponent(btn.dataset.id)}`, { method: "DELETE", headers: authHeaders })
+    window.camazeFetch(`/api/org?resource=people&id=${encodeURIComponent(btn.dataset.id)}`, { method: "DELETE", headers: authHeaders })
       .then(async (res) => {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
@@ -457,7 +459,7 @@ function wirePeople() {
     };
     const submitBtn = form.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
-    fetch("/api/org?resource=people", {
+    window.camazeFetch("/api/org?resource=people", {
       method: "POST",
       headers: { ...authHeaders, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -478,7 +480,7 @@ function wirePeople() {
 }
 
 async function main() {
-  const cfgRes = await fetch("/api/config");
+  const cfgRes = await window.camazeFetch("/api/config");
   const cfg = await cfgRes.json();
   if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
     document.getElementById("content").innerHTML =
@@ -493,6 +495,7 @@ async function main() {
     return;
   }
 
+  await window.initializeSimulation(session);
   document.getElementById("user-email").textContent = session.user.email ?? "";
   document.getElementById("header-right").style.visibility = "visible";
   document.getElementById("signout-btn").addEventListener("click", async () => {
@@ -580,13 +583,13 @@ async function main() {
       </div>
     </div>`;
 
-  const now = new Date();
+  const now = window.camazeNow();
   state.month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 
   const [deptRes, peopleRes, entitiesRes] = await Promise.all([
-    fetch("/api/org?resource=departments", { headers: authHeaders }),
-    fetch("/api/org?resource=people", { headers: authHeaders }),
-    fetch(`/api/org?resource=entities&month=${encodeURIComponent(state.month)}`, { headers: authHeaders }),
+    window.camazeFetch("/api/org?resource=departments", { headers: authHeaders }),
+    window.camazeFetch("/api/org?resource=people", { headers: authHeaders }),
+    window.camazeFetch(`/api/org?resource=entities&month=${encodeURIComponent(state.month)}`, { headers: authHeaders }),
   ]);
   const [deptData, peopleData, entitiesData] = await Promise.all([deptRes.json(), peopleRes.json(), entitiesRes.json()]);
   if (deptData.error) throw new Error(deptData.error);

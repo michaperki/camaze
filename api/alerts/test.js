@@ -1,3 +1,4 @@
+const businessClock = require("../../lib/context");
 // Sends a real spike-alert email immediately, using yesterday's actual
 // numbers — used by the "Send test alert" button on the Notifications page.
 // Mirrors api/digest.js's "Send test email now": sends regardless of
@@ -28,7 +29,7 @@ module.exports = async (req, res) => {
     const costData = await fetchAllCosts(overrides, false);
     const usageSeries = dailyUsage(costData.days);
 
-    const now = new Date();
+    const now = businessClock.now();
     const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
     const dateStr = yesterday.toISOString().slice(0, 10);
 

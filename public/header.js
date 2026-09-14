@@ -61,9 +61,10 @@
   function renderAppHeader() {
     const mount = document.getElementById("app-header");
     if (!mount) return;
-    const current = normalize(window.location.pathname);
+    const current = normalize(window.location.pathname.replace(/^\/sim(?=\/|$)/, "") || "/dashboard");
     const links = NAV.map((item) => {
-      const active = normalize(item.href) === current;
+      if (window.camazeSimulation) item.href = "/sim" + item.href;
+      const active = normalize(item.href.replace(/^\/sim/, "")) === current;
       return `<a href="${item.href}"${active ? ' class="active"' : ""}>${item.label}</a>`;
     }).join("");
     mount.innerHTML =

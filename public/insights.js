@@ -77,16 +77,17 @@ function renderInsights(data) {
 (async () => {
   const status = document.getElementById("status");
   try {
-    const config = await fetch("/api/config").then(r => r.json());
+    const config = await window.camazeFetch("/api/config").then(r => r.json());
     const client = supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
     const { data: { session } } = await client.auth.getSession();
     if (!session) { location.replace("/login.html"); return; }
+    await window.initializeSimulation(session);
     document.getElementById("user-email").textContent = session.user.email || "";
     document.getElementById("header-right").style.visibility = "visible";
     document.getElementById("signout-btn").onclick = async () => { await client.auth.signOut(); location.replace("/login.html"); };
     status.textContent = "Loading recorded usage...";
     try {
-      const response = await fetch("/api/insights", { headers: { Authorization: `Bearer ${session.access_token || ""}` }, signal: AbortSignal.timeout(30000) });
+      const response = await window.camazeFetch("/api/insights", { headers: { Authorization: `Bearer ${session.access_token || ""}` }, signal: AbortSignal.timeout(30000) });
       if (response.status === 401) { location.replace("/login.html"); return; }
       if (!response.ok) throw new Error("Insights could not be loaded. Refresh to retry.");
       const data = await response.json();

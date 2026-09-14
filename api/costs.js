@@ -1,3 +1,4 @@
+const businessClock = require("../lib/context");
 // camaze — minimal AI spend tracker.
 // Vercel serverless function: proxies each provider's cost API so keys stay server-side.
 const { verifyUser } = require("../lib/supabase");
@@ -95,7 +96,7 @@ async function backfill(req, res) {
   }
 
   try {
-    const months = monthsBack(new Date(), 6);
+    const months = monthsBack(businessClock.now(), 6);
     // Sequential, not parallel — each month already fans out to 3 provider
     // calls concurrently inside syncUserMonth; running all 6 months at once
     // would multiply that to ~18 concurrent provider requests, which is how
@@ -225,7 +226,7 @@ async function buildDataFromStore(userId, month, configuredProviders, syncState,
     timing.mark("org_data", () => loadOrgData(userId)),
   ]);
 
-  const rawCostData = costDataFromStoredRows(dailyRows, month, new Date(), configuredProviders, syncState.providersSucceeded);
+  const rawCostData = costDataFromStoredRows(dailyRows, month, businessClock.now(), configuredProviders, syncState.providersSucceeded);
   const { dayModels, projects, isCurrentMonth, daysInMonth, providerRawUsd, ...costData } = rawCostData;
   const attribution = resolveAttribution(attributionRows, month, orgData).sort((a, b) => b.amount_usd - a.amount_usd);
 
@@ -259,19 +260,19 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
     const localDevFallback = !process.env.SUPABASE_SERVICE_ROLE_KEY;
     const user = await timing.mark("verify_user", () => verifyUser(req.headers.authorization).catch(() => null));
 
-    const now = Date.now();
+    const now = +businessClock.now();
     const nowMonth = currentMonthStr(new Date(now));
     const requestedMonth = typeof req.query?.month === "string" && MONTH_RE.test(req.query.month) ? req.query.month : null;
     const month = requestedMonth || nowMonth;
     const isClosedMonth = month < nowMonth;
 
-    const cacheKey = `${user?.id || "env"}:${month}`;
+    const cacheKey = `${user?.id || "env"}:${month}:${businessClock.current()?.environment.revision || 0}`;
     // Set by the dashboard right after a key was connected/disconnected on
     // Integrations, so that change shows up immediately instead of waiting
     // out a cached response computed from the old set of keys.
     const forceRefresh = req.query?.refresh === "1";
 
-    const cached = cache.get(cacheKey);
+    const cached = businessClock.current() ? null : cache.get(cacheKey);
     if (!forceRefresh && cached && now - cached.fetchedAt < CACHE_TTL_MS) {
       finish(200, { ...cached.data, cached: true, cachedAt: new Date(cached.fetchedAt).toISOString() }, true);
       return;
@@ -340,7 +341,7 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
 
     if (syncIsUsable && (isClosedMonth || syncIsFresh)) {
       const data = await buildDataFromStore(user.id, month, configuredProviders, syncState, budget, fixedCosts, reconciliationCompact, unverifiable);
-      cache.set(cacheKey, { data, fetchedAt: now });
+      if (!businessClock.current()) cache.set(cacheKey, { data, fetchedAt: now });
       finish(200, { ...data, cached: false, cachedAt: new Date(now).toISOString() }, false);
       return;
     }
@@ -376,7 +377,7 @@ async function handle(req, res, handlerStart, coldStart, debugTiming) {
     const attribution = resolveAttribution(rawAttribution, month, orgData).sort((a, b) => b.amount_usd - a.amount_usd);
 
     const data = composeResponseData(costData, isCurrentMonth, daysInMonth, attribution, budget, fixedCosts, new Date(now).toISOString(), false, reconciliationCompact, unverifiable);
-    cache.set(cacheKey, { data, fetchedAt: now });
+    if (!businessClock.current()) cache.set(cacheKey, { data, fetchedAt: now });
     finish(200, { ...data, cached: false, cachedAt: new Date(now).toISOString() }, false);
 
     // Store what was just fetched — never for local dev (no Supabase) or an

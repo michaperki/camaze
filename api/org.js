@@ -1,3 +1,4 @@
+const businessClock = require("../lib/context");
 // Authenticated CRUD for org structure — departments, people, and the
 // entity-assignment mapping between attribution entities and them — plus
 // the discovered-entities listing assignments.html renders. Every request
@@ -15,7 +16,7 @@ const { logAudit } = require("../lib/audit");
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
 function currentMonthStr() {
-  const now = new Date();
+  const now = businessClock.now();
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 

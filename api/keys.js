@@ -94,6 +94,11 @@ module.exports = async (req, res) => {
     return;
   }
 
+  if (require('../lib/context').current()) {
+    if (req.method !== 'GET') return res.status(403).json({ error: 'Simulation connections are controlled by the scenario; real credentials are not accepted.' });
+    const providers = Object.fromEntries(['anthropic','openai','google'].map(p => [p, { connected: true, simulated: true, hint: 'SIMULATED' }]));
+    return res.status(200).json({ providers });
+  }
   try {
     if (req.method === "GET") return await handleGet(user, res);
     if (req.method === "POST") return await handlePost(req, res, user);

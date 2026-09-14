@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <script src="/theme-init.js"></script>
+<script src="/simulation.js"></script>
+<link rel="stylesheet" href="/simulation.css">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>camaze — how much is that?!</title>
 <link rel="stylesheet" href="/shared.css">
@@ -385,7 +387,7 @@ const UNASSIGNED_DEPT = { id: null, name: "Unassigned" };
 // /api/costs as ?month=YYYY-MM; the backend scopes every provider call and
 // the summary computation to exactly that calendar month.
 function currentMonthUTC() {
-  const now = new Date();
+  const now = window.camazeNow();
   return { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 };
 }
 let selectedMonth = currentMonthUTC();
@@ -1023,14 +1025,14 @@ async function resyncMonth(month, accessToken, btn) {
   const originalText = btn.textContent;
   btn.textContent = "Syncing…";
   try {
-    const syncRes = await fetch(`/api/costs?action=sync&month=${encodeURIComponent(month)}`, {
+    const syncRes = await window.camazeFetch(`/api/costs?action=sync&month=${encodeURIComponent(month)}`, {
       method: "POST", headers: { Authorization: `Bearer ${accessToken}` },
     });
     const syncData = await syncRes.json();
     if (syncData.error) throw new Error(syncData.error);
 
     btn.textContent = "Checking…";
-    const reconcileRes = await fetch(`/api/costs?action=reconcile&month=${encodeURIComponent(month)}`, {
+    const reconcileRes = await window.camazeFetch(`/api/costs?action=reconcile&month=${encodeURIComponent(month)}`, {
       method: "POST", headers: { Authorization: `Bearer ${accessToken}` },
     });
     const reconcileData = await reconcileRes.json();
@@ -1068,7 +1070,7 @@ function showBudgetForm(accessToken, currentValue) {
       errorEl.textContent = "Enter a valid amount.";
       return;
     }
-    fetch("/api/budget", {
+    window.camazeFetch("/api/budget", {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ budget: value }),
@@ -1265,7 +1267,7 @@ function loadDashboard(accessToken, forceRefreshOverride) {
   if (forceRefresh) params.set("refresh", "1");
   const url = "/api/costs?" + params;
 
-  return fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
+  return window.camazeFetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
     .then(async (res) => {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -1287,7 +1289,7 @@ function prefetchMonth(accessToken, sel) {
   const existing = monthCache.get(key);
   if (existing && isMonthCacheFresh(key, existing)) return;
   const params = new URLSearchParams({ month: key });
-  fetch("/api/costs?" + params, { headers: { Authorization: `Bearer ${accessToken}` } })
+  window.camazeFetch("/api/costs?" + params, { headers: { Authorization: `Bearer ${accessToken}` } })
     .then((res) => res.json())
     .then((data) => {
       if (!data.error) monthCache.set(key, { data, fetchedAt: Date.now() });
@@ -1296,7 +1298,7 @@ function prefetchMonth(accessToken, sel) {
 }
 
 (async () => {
-  const cfgRes = await fetch("/api/config");
+  const cfgRes = await window.camazeFetch("/api/config");
   const cfg = await cfgRes.json();
   if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
     document.getElementById("content").innerHTML =
@@ -1313,7 +1315,7 @@ function prefetchMonth(accessToken, sel) {
   // log the audit event without double-logging on every dashboard visit.
   client.auth.onAuthStateChange((event, signedInSession) => {
     if (event !== "SIGNED_IN") return;
-    fetch("/api/audit-signin", {
+    window.camazeFetch("/api/audit-signin", {
       method: "POST",
       headers: { Authorization: `Bearer ${signedInSession.access_token}` },
     }).catch(() => {});
@@ -1326,6 +1328,8 @@ function prefetchMonth(accessToken, sel) {
     return;
   }
 
+  await window.initializeSimulation(session);
+  selectedMonth = currentMonthUTC();
   document.getElementById("user-email").textContent = session.user.email ?? "";
   document.getElementById("header-right").style.visibility = "visible";
   document.getElementById("signout-btn").addEventListener("click", async () => {
