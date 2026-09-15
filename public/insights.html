@@ -27,12 +27,14 @@
   .savings-headline { font-size: 17px; font-weight: 700; color: var(--ok-fg); }
   .savings-detail { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
   .reason { padding: 0 24px; font-size: 14px; }
-  .insight details { border-top: 1px solid var(--border); padding: 16px 24px; font-size: 13px; overflow-wrap: anywhere; }
+  .insight details { border-top: 1px solid var(--border); padding: 16px 24px; font-size: 13px; overflow-wrap: anywhere; background: var(--surface-1); color: var(--text-primary); color-scheme: inherit; }
   .insight summary { cursor: pointer; color: var(--text-secondary); }
   .insight details p { margin: 12px 0 0; }
   .insight details ul { padding-left: 20px; line-height: 1.8; }
   #coverage { margin-top: 28px; font-size: 14px; }
   #coverage ul { padding-left: 20px; line-height: 1.8; overflow-wrap: anywhere; }
+  #coverage details { background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 16px; margin-top: 10px; }
+  #coverage details summary { background: var(--surface-1); color: var(--text-secondary); }
   @media(max-width: 680px) {
     .insight-top, .metric-grid, .insight details { padding-left: 16px; padding-right: 16px; }
     .savings { margin-left: 16px; margin-right: 16px; }

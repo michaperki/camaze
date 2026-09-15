@@ -111,6 +111,17 @@ body {
 }
 a { color: inherit; }
 
+/* Native controls and disclosure elements otherwise keep browser/Web
+   Component light surfaces when the app explicitly switches themes. */
+input, select, textarea {
+  color-scheme: inherit;
+  background: var(--page);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+details { color: var(--text-primary); background: var(--surface-1); }
+details > summary { color: var(--text-secondary); background: var(--surface-1); }
+
 /* Tabular mono figures for spend amounts, percentages, and other numeric
    values — apply alongside (or instead of) font-variant-numeric:
    tabular-nums, which system-ui already gave those elements. */
